@@ -13,7 +13,7 @@
   "settings": {},
 
   // Add the IDs of extensions you want installed when the container is created.
-  "extensions": [],
+  "extensions": ["ms-python.python", "ms-python.vscode-pylance", "ms-toolsai.jupyter", "kevinglasson.cornflakes-linter"],
 
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
   // "forwardPorts": [],
@@ -24,7 +24,7 @@
   "containerEnv": { "DISPLAY": "${localEnv:DISPLAY}", "QT_X11_NO_MITSHM":"1" },
   "mounts": [
       "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
-      "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind" ],
+      "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind"]
 
   // Uncomment to connect as a non-root user if you've added one. See https://aka.ms/vscode-remote/containers/non-root.
   // "remoteUser": "vscode"

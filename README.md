@@ -4,26 +4,19 @@ At the moment it connects to FTX trading platform, throught the python API.
 See the [API doc](https://docs.ftx.us/#overview)
 
 # Setup
-The setup is tailoredj to VS Code, but, if you just fire up the Docker container from the ```Dockerfile```
+The setup is tailored to VS Code, but, if you just fire up the Docker container from the ```Dockerfile```
 you can use any IDE.
  
  VS Code steps:
- - Install extensions Docker (Microsoft), Remote-containers (Microsoft), Python (Microsoft)
+ - Install extensions Docker (Microsoft), Remote-containers (Microsoft)
  - Click in the green area in the bottom left corner (Open a Remote Window)
  - Reopen in container (Select from Dockerfile)
- - Run ```xhost local:docker``` in the host command line (this is needed to run the GUI from docker)
  - If all goes well, you just need press F5 and it should start build and then the application with Debug.
  - Don't forget to set your API keys in a freshly created ```.env``` file see ```.env.example``` as an example
  - NEVER PUSH THE ```.env``` IN YOUR REMOTE REPO. (I added it to gitignore to make it harder :) )
 
 Jupyter notebook:
  - If you are using VS Code as well, just run ```jupyter notebook --allow-root``` in the VS Code terminal once the above steps are done
-
-# Troubleshooting
-## GUI is not starting
- Most likely you get this message if the container cannot start a gui
- ```
-
-```
-
-The container shall be configured by the ```devcontainer.json``` to enable X11 forwarding, so most likley you forgot to run ```xhost local:docker``` in the host system command line.
+ - If you want to use the container but not VSCode run the following:
+    - ```docker build -f Dockerfile -t trading_env:latest .```
+    - ```docker run -it --env-file .env -p 8888:8888 -e DISPLAY=$DISPLAY -v /var/run/docker.sock:/var/run/docker.sock -v /tmp/.X11-unix:/tmp/.X11-unix trading_env:latest jupyter notebook --allow-root --no-browser --ip=0.0.0.0```

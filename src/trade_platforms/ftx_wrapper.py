@@ -1,15 +1,18 @@
-from datetime import datetime
 from dotenv import load_dotenv
 import os
 import pandas as pd
 import plotly.graph_objects as go
 import requests
+from typing import List
 from trade_platforms.ftx_client import FtxClient
 from trade_platforms.platform_wrapper_base import PlatformWrapper
 
+
+## FTX wrapper on the original ftx client from here
+#  https://github.com/ftexchange/ftx/blob/master/rest/client.py
 class FTX(PlatformWrapper):
-    def __init__(self, name, base_currency, quote_currency):
-        super(FTX, self).__init__(name)
+    def __init__(self, base_currency, quote_currency):
+        super(FTX, self).__init__(f'FTX-{base_currency}-{quote_currency}')
         self.api_url = 'https://ftx.com/api/markets'
         # Load env to get API key
         load_dotenv()
@@ -17,52 +20,73 @@ class FTX(PlatformWrapper):
         self.api_secret = os.getenv("FTX_API_SECRET")
         self.base_currency = base_currency
         self.quote_currency = quote_currency
-    
-    def getAllMarket(self):
-        # Get all market data as JSON
-        all_markets = requests.get(self.api_url).json()
-        # Convert JSON to Pandas DataFrame
-        df = pd.DataFrame(all_markets['result'])
-        df.set_index('name', inplace = True)
-        print(df)
-
-    def singleMarket(self):
         if self.base_currency is None or self.quote_currency is None:
-            raise Exception(f"Market not selected base currency is {self.base_currency}\
-and quote currency {self.quote_currency}")
+            raise Exception(f"Market not selected. \"base_currency\" is {self.base_currency}\
+and \"quote_currency\" is {self.quote_currency}")
+
+    ## Returns the market data.
+    def market_data(self):
         # Specify the base and quote currencies to get single market data
         request_url = f'{self.api_url}/{self.base_currency}/{self.quote_currency}'
-        df = pd.DataFrame(requests.get(request_url).json())
-        print(df['result'])
+        return pd.DataFrame(requests.get(request_url).json())
 
-    def getHistoricalData(self):
-        if self.base_currency is None or self.quote_currency is None:
-            raise Exception(f"Market not selected base currency is {self.base_currency}\
-and quote currency {self.quote_currency}")
+    ## Get historical data
+    #  @param start_date starting date of the data
+    #  @param end_date end date of the data
+    #  @param resolution of the data
+    def historical_data(self, start_date, end_date, resolution):
         # Specify the base and quote currencies to get single market data
         request_url = f'{self.api_url}/{self.base_currency}/{self.quote_currency}'
-        # 1 day = 60 * 60 * 24 seconds
-        daily=str(60*60*24)
-        # Start date = 2021-01-01
-        start_date = datetime(2021, 1, 1).timestamp()
+
+        if end_date is None:
+            request = \
+                f'{request_url}/candles?resolution={resolution}&start_time={start_date}'
+        else:
+            request = \
+                f'{request_url}/candles?resolution={resolution}\
+&start_time={start_date}&end_time={end_date}'
         # Get the historical market data as JSON
-        historical = requests.get(
-            f'{request_url}/candles?resolution={daily}&start_time={start_date}'
-        ).json()
+        historical = requests.get(request).json()
+
         # Convert JSON to Pandas DataFrame
-        df = pd.DataFrame(historical['result'])
+        return pd.DataFrame(historical['result'])
+
+    ## Returns the order history.
+    #  @param side filter by side ("buy"/"sell")
+    #  @param order_type filter by type order ("limit")
+    #  @param start_time starting date of the history
+    #  @param end_time end date of the history.
+    def get_order_history(
+            self,
+            side: str = None,
+            order_type: str = None,
+            start_time: float = None,
+            end_time: float = None) -> List[dict]:
+        return pd.DataFrame(self.get_order_history(
+            f"{self.base_currency}/{self.quote_currency}",
+            side,
+            order_type,
+            start_time,
+            end_time))
+
+    ## Get plotting historical data
+    #  @param start_date starting date of the data
+    #  @param end_date end date of the data
+    #  @param resolution of the data
+    def plot_historical(self, start_date=None, end_date=None, resolution=None):
+        df = self.historical_data(start_date, end_date, resolution)
         # Convert time to date
         df['date'] = pd.to_datetime(
-            df['time']/1000, unit='s', origin='unix'
-        ) 
-        # Remove unnecessar columns
+            df['time'] / 1000, unit='s', origin='unix'
+        )
+        # Remove unnecessary columns
         df.drop(['startTime', 'time'], axis=1, inplace=True)
-        
+
         fig = go.Figure()
         fig.update_layout(
             title={
                 'text': f"{self.base_currency}/{self.quote_currency}",
-                'x':0.5,
+                'x': 0.5,
                 'xanchor': 'center'
             },
             xaxis_title="Date",
@@ -71,7 +95,7 @@ and quote currency {self.quote_currency}")
         )
         fig.add_trace(
             go.Candlestick(
-                x=df['date'],
+                x=df['startTime'],
                 open=df['open'],
                 high=df['high'],
                 low=df['low'],
@@ -85,16 +109,13 @@ and quote currency {self.quote_currency}")
     #   @param price  price of the order
     #   @param volume volume of the order
     def placeOrder(self, side, price, volume):
-        if self.base_currency is None or self.quote_currency is None:
-            raise Exception(f"Market not selected. \"base_currency\" is {self.base_currency}\
-and \"quote_currency\" is {self.quote_currency}")
         ftx_client = FtxClient(
-            api_key=self.api_key, 
+            api_key=self.api_key,
             api_secret=self.api_secret)
         # Place an order
         try:
             order_result = ftx_client.place_order(
-                market=f"{self.base_currency}/{self.quote_currency}", 
+                market=f"{self.base_currency}/{self.quote_currency}",
                 side=side,
                 price=price,
                 size=volume
@@ -106,13 +127,9 @@ and \"quote_currency\" is {self.quote_currency}")
 
     ## Cancels the order
     def cancelOrder(self, order):
-        if self.base_currency is None or self.quote_currency is None:
-            raise Exception(f"Market not selected. \"base_currency\" is {self.base_currency}\
-and \"quote_currency\" is {self.quote_currency}")
-
         ftx_client = FtxClient(
-        api_key=self.api_key, 
-        api_secret=self.api_secret)
+            api_key=self.api_key,
+            api_secret=self.api_secret)
         try:
             co_result = ftx_client.cancel_order(
                 order_id=order['id']
@@ -123,9 +140,6 @@ and \"quote_currency\" is {self.quote_currency}")
 
     ## Returns the market ask.
     def marketAsk(self):
-        if self.base_currency is None or self.quote_currency is None:
-            raise Exception(f"Market not selected. \"base_currency\" is {self.base_currency}\
-and \"quote_currency\" is {self.quote_currency}")
         request_url = f'{self.api_url}/{self.base_currency}/{self.quote_currency}'
         market = requests.get(request_url).json()
         market_ask = market['result']['ask']
