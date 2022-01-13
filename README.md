@@ -2,6 +2,7 @@
 Python based algo trading client, to do the money making for you.
 At the moment it connects to FTX trading platform, throught the python API.
 See the [API doc](https://docs.ftx.us/#overview)
+!!This repo is under heavy development at the moment!!
 
 # Setup
 The setup is tailored to VS Code, but, if you just fire up the Docker container from the ```Dockerfile```

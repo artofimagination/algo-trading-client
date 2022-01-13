@@ -34,3 +34,9 @@ class PlatformWrapper():
 
     def get_start_timestamp(self):
         return None
+
+    def set_data_interval(self, start_time, end_time):
+        pass
+
+    def set_start_balance(self, balance_USD):
+        pass

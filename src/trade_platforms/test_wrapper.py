@@ -1,26 +1,33 @@
-from typing import List
-import uuid
 from datetime import datetime, timedelta
 import pandas as pd
 import plotly.graph_objects as go
 
-from trade_platforms.platform_wrapper_base import PlatformWrapper
+from trade_platforms.validation_wrapper import ValidationWrapper
 
 
 ## Test platform client wrapper.
 #  Simulates platform behavior using pregenerated test data.
 #  No connection is used to a real platform.
-class TestWrapper(PlatformWrapper):
+class TestWrapper(ValidationWrapper):
     def __init__(self):
         super(TestWrapper, self).__init__("TestWrapper")
         # Stores the test data set the wrapper will feed to the bot.
         self.testData = None
+        # Start time of test data playback
         self.start = datetime(2021, 2, 1, 0, 0)
-        self.end = datetime(2021, 2, 4, 0, 0)
+        # End time of test data playback.
+        self.end = datetime(2021, 2, 2, 0, 0)
+        # Current test data playback timestamp
         self.timestamp = self.start
+        # Overall progress (for calculating progress percentage)
         self.overall_progress = self.start
+        # Data is stored in chunks (for example daily),
+        # this progress count contains the progress
+        # of processing a single chunk. It is reset to 0 on a new chunk.
         self.chunk_progress = 0
+        # Previous data of the processing
         self.previous_data = None
+        # Stores the historical data that has been already processed in the run.
         self.historical_data = pd.DataFrame({
             "close": [],
             "high": [],
@@ -29,6 +36,7 @@ class TestWrapper(PlatformWrapper):
             "startTime": [],
             "volume": []
         })
+        # Simulated user account info.
         self.account_info = {
             "backstopProvider": True,
             "collateral": 2000,
@@ -62,79 +70,18 @@ class TestWrapper(PlatformWrapper):
                 }
             ]
         }
-        self.start_amount_USD = 200
-        self.balances = {
-            "USD": {
-                "coin": "USD",
-                "free": self.start_amount_USD,
-                "spotBorrow": 0.0,
-                "total": self.start_amount_USD,
-                "usdValue": self.start_amount_USD,
-                "availableWithoutBorrow": self.start_amount_USD
-            },
-            "BTC": {
-                "coin": "BTC",
-                "free": 0.0,
-                "spotBorrow": 0.0,
-                "total": 0.0,
-                "usdValue": 0.0,
-                "availableWithoutBorrow": 0.0
-            }
-        }
-        self.orders = pd.DataFrame({
-            "avgFillPrice": [],
-            "clientId": [],
-            "createdAt": [],
-            "filledSize": [],
-            "future": [],
-            "id": [],
-            "ioc": [],
-            "market": [],
-            "postOnly": [],
-            "price": [],
-            "reduceOnly": [],
-            "remainingSize": [],
-            "side": [],
-            "size": [],
-            "status": [],
-            "type": []})
 
-    def placeOrder(self, side, price, volume):
-        amount_to_pay_usd = (volume + volume * self.account_info['takerFee']) * price
-        amount_to_pay_btc = volume
-        if side == 'buy' and self.balances['USD']['free'] < amount_to_pay_usd:
-            return None
-        elif side == 'buy' and self.balances['USD']['free'] >= amount_to_pay_usd:
-            self.balances['USD']['free'] -= amount_to_pay_usd
-        elif side == 'sell' and self.balances['BTC']['free'] < amount_to_pay_btc:
-            return None
-        elif side == 'sell' and self.balances['BTC']['free'] >= amount_to_pay_btc:
-            self.balances['BTC']['free'] -= amount_to_pay_btc
+    ## Sets the start and end time of the loadable test data.
+    #  @param start_time test data feed starting time
+    #  @param end_time test data feed end time
+    def set_data_interval(self, start_time, end_time):
+        self.start = start_time
+        self.end = end_time
 
-        orderId = uuid.uuid4()
-        new_order = pd.json_normalize({
-            "avgFillPrice": 10135.25,
-            "clientId": None,
-            "createdAt": "2019-06-27T15:24:03.101197+00:00",
-            "filledSize": 0.000,
-            "future": "BTC-USD",
-            "id": str(orderId),
-            "ioc": False,
-            "market": "BTC-USD",
-            "postOnly": False,
-            "price": price,
-            "reduceOnly": False,
-            "remainingSize": volume,
-            "side": side,
-            "size": volume,
-            "status": "open",
-            "type": "limit"
-        })
-        self.orders = self.orders.append(new_order)
-
-        response = {"id": orderId}
-        return response
-
+    ## Plots the historical data
+    #  @param start_date Not used
+    #  @param end_date Not used
+    #  @param resolution Not used
     def plot_historical(self, start_date=None, end_date=None, resolution=None):
         df = self.historical_data
 
@@ -160,65 +107,20 @@ class TestWrapper(PlatformWrapper):
         )
         fig.show()
 
-    def cancelOrder(self, order):
-        pass
-
+    ## Returns the current market ask. In test mode
+    # That is the open value of the current candle.
     def marketAsk(self):
-        pass
+        return self.previous_data['open']
 
+    ## Returns the simulation start timestamp.
     def get_start_timestamp(self):
         return self.start
 
-    def get_account_info(self):
-        return self.account_info
-
+    ## Sets the test data set.
     def set_test_data(self, df):
         self.testData = df
 
-    def get_balances(self):
-        return self.balances
-
-    def get_order_history(
-            self,
-            side: str = None,
-            order_type: str = None,
-            start_time: float = None,
-            end_time: float = None) -> List[dict]:
-        return self.orders
-
-    def _execute_buy(self, price, volume):
-        amount_to_pay = (volume + volume * self.account_info['takerFee']) * price
-        self.balances['USD']['total'] -= amount_to_pay
-        self.balances['USD']['usdValue'] = self.balances['USD']['total']
-        self.balances['BTC']['total'] += volume
-        self.balances['BTC']['free'] += volume
-        self.balances['BTC']['usdValue'] = self.balances['BTC']['total'] * price
-
-    def _execute_sell(self, price, volume):
-        amount_to_earn = (volume - volume * self.account_info['takerFee']) * price
-        self.balances['USD']['total'] += amount_to_earn
-        self.balances['USD']['free'] += amount_to_earn
-        self.balances['USD']['usdValue'] = self.balances['USD']['total']
-        self.balances['BTC']['total'] -= volume
-        self.balances['BTC']['usdValue'] = self.balances['BTC']['total'] * price
-
-    def _execute_orders(self, order):
-        if self.previous_data is not None and \
-            ((self.previous_data['open'] >= self.previous_data['close'] and
-                order['price'] <= self.previous_data['open'] and
-                order['price'] >= self.previous_data['close']) or
-                (self.previous_data['open'] < self.previous_data['close'] and
-                    order['price'] >= self.previous_data['open'] and
-                    order['price'] <= self.previous_data['close'])):
-            order['filledSize'] = order['size']
-            order['remainingSize'] = 0.0
-            order['status'] = 'closed'
-            if order['side'] == 'buy':
-                self._execute_buy(order['price'], order['size'])
-            else:
-                self._execute_sell(order['price'], order['size'])
-        return order
-
+    ## Evaluates test wrapper tasks.
     def evaluate(self):
         if self.overall_progress > self.end:
             return (False, None, None)
@@ -228,7 +130,7 @@ class TestWrapper(PlatformWrapper):
         print(f"{percentage:.3f}%")
         timestamp = self.timestamp
         chunk_length = len(self.testData[timestamp.strftime("DF%Y%m%d")])
-        self.orders = self.orders.apply(self._execute_orders, axis=1)
+        super().evaluate()
 
         self.overall_progress += timedelta(minutes=1)
         if self.chunk_progress == chunk_length:
@@ -241,6 +143,3 @@ class TestWrapper(PlatformWrapper):
         return (True,
                 self.previous_data,
                 timestamp + timedelta(minutes=self.chunk_progress - 1))
-
-    def cleanup_iteration(self):
-        self.orders = self.orders[self.orders.status != 'closed']

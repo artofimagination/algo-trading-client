@@ -115,6 +115,22 @@ It does not do anything in production, or validation mode")
             return
         self.testWrapper.set_test_data(df)
 
+    ## Sets test data interval. Only useful in Test mode.
+    def set_test_data_interval(self, start_time, end_time):
+        if self.mode != Mode.Test:
+            show_alert_box("You are using set_data_interval(df). \
+It does not do anything in production, or validation mode")
+            return
+        self.testWrapper.set_data_interval(start_time, end_time)
+
+    ## Sets test or validation start balance. Only useful in Test and Validation mode.
+    def set_start_balance(self, balance_USD):
+        if self.mode != Mode.Test and self.mode != Mode.Validation:
+            show_alert_box("You are using set_start_balance(df). \
+It does not do anything in production mode")
+            return
+        self.testWrapper.set_start_balance(balance_USD)
+
     ## Gets the starting timestamp of the bot execution.
     def get_start_timestamp(self):
         return self._select_platform_wrapper(None).get_start_timestamp()
