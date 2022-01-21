@@ -34,7 +34,7 @@ class BotBase():
         # Contains all client side functionality for test mode.
         self.testWrapper = TestWrapper()
         # Validation mode platform client wrapper.
-        self.validationWrapper = ValidationWrapper()
+        self.validationWrapper = ValidationWrapper(self.platforms)
         # Run mode. See Mode(Enum).
         self.mode = mode
         if self.mode == Mode.Production and \
@@ -57,16 +57,21 @@ class BotBase():
             return self.testWrapper
 
     ## Places an order.
-    def placeOrder(self, market=None, side=None, price=None, volume=None):
-        return self._select_platform_wrapper(market).placeOrder(side, price, volume)
+    def place_order(self, market=None, type=None, side=None, price=None, volume=None):
+        return self._select_platform_wrapper(market).place_order(
+            type, side, price, volume)
 
     ## Cancels the order.
-    def cancelOrder(self, market=None, order=None):
-        return self._select_platform_wrapper(market).cancelOrder(order)
+    def cancel_order(self, market=None, order=None):
+        return self._select_platform_wrapper(market).cancel_order(order)
 
-    ## Returns the market ask
-    def marketAsk(self, market=None):
-        return self._select_platform_wrapper(market).marketAsk()
+    ## Returns the current price.
+    def get_current_price(self, market=None):
+        return self._select_platform_wrapper(market).get_current_price()
+
+    ## Returns the market data.
+    def set_wait_time(self, market=None, wait_time_seconds=0):
+        return self._select_platform_wrapper(market).set_wait_time(wait_time_seconds)
 
     ## Returns the market data.
     def market_data(self, market=None):
@@ -74,9 +79,9 @@ class BotBase():
 
     ## Returns the historical data.
     def historical_data(
-            self, market=None, start_date=None, end_date=None, resolution=60 * 60 * 24):
+            self, market=None, start_time=None, end_time=None, resolution=60 * 60 * 24):
         return self._select_platform_wrapper(market).historical_data(
-            start_date, end_date, resolution)
+            start_time, end_time, resolution)
 
     ## Returns the order history.
     def get_order_history(
@@ -100,28 +105,20 @@ class BotBase():
         pass
 
     ## Evaluates the platform side procedures. For example, returning current market data.
-    def evaluate(self, market=None):
-        return self._select_platform_wrapper(market).evaluate()
+    def evaluate(self, trade, market=None):
+        return self._select_platform_wrapper(market).evaluate(trade)
 
     ## Maintenance work at the end of the iteration.
     def cleanup_iteration(self, market=None):
         return self._select_platform_wrapper(market).cleanup_iteration()
 
-    ## Sets test data. Only useful in Test mode.
-    def set_test_data(self, df):
-        if self.mode != Mode.Test:
-            show_alert_box("You are using set_test_data(df). \
-It does not do anything in production, or validation mode")
-            return
-        self.testWrapper.set_test_data(df)
-
     ## Sets test data interval. Only useful in Test mode.
-    def set_test_data_interval(self, start_time, end_time):
+    def set_test_data_interval(self, test_data_location, start_time, end_time):
         if self.mode != Mode.Test:
-            show_alert_box("You are using set_data_interval(df). \
+            show_alert_box("You are using set_data_interval(). \
 It does not do anything in production, or validation mode")
             return
-        self.testWrapper.set_data_interval(start_time, end_time)
+        self.testWrapper.set_data_interval(test_data_location, start_time, end_time)
 
     ## Sets test or validation start balance. Only useful in Test and Validation mode.
     def set_start_balance(self, balance_USD):
@@ -136,7 +133,7 @@ It does not do anything in production mode")
         return self._select_platform_wrapper(None).get_start_timestamp()
 
     ## Returns the account info.
-    def get_account_info(self, market):
+    def get_account_info(self, market=None):
         return self._select_platform_wrapper(market).get_account_info()
 
     ## Returns the balances.

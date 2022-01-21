@@ -12,6 +12,7 @@ you can use any IDE.
  - Install extensions Docker (Microsoft), Remote-containers (Microsoft)
  - Click in the green area in the bottom left corner (Open a Remote Window)
  - Reopen in container (Select from Dockerfile)
+ - Run ```xhost local:docker``` in the host command line (this will allow the GUI forwarding from the container)
  - If all goes well, you just need press F5 and it should start build and then the application with Debug.
  - Don't forget to set your API keys in a freshly created ```.env``` file see ```.env.example``` as an example
  - NEVER PUSH THE ```.env``` IN YOUR REMOTE REPO. (I added it to gitignore to make it harder :) )

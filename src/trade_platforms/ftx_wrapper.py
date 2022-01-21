@@ -34,19 +34,21 @@ and \"quote_currency\" is {self.quote_currency}")
     #  @param start_date starting date of the data
     #  @param end_date end date of the data
     #  @param resolution of the data
-    def historical_data(self, start_date, end_date, resolution):
+    def historical_data(self, start_time, end_time, resolution):
         # Specify the base and quote currencies to get single market data
         request_url = f'{self.api_url}/{self.base_currency}/{self.quote_currency}'
 
-        if end_date is None:
+        if end_time is None:
             request = \
-                f'{request_url}/candles?resolution={resolution}&start_time={start_date}'
+                f'{request_url}/candles?resolution={resolution}&start_time={start_time}'
         else:
             request = \
                 f'{request_url}/candles?resolution={resolution}\
-&start_time={start_date}&end_time={end_date}'
+&start_time={start_time}&end_time={end_time}'
         # Get the historical market data as JSON
         historical = requests.get(request).json()
+        if historical['success'] is False:
+            raise Exception(historical['error'])
 
         # Convert JSON to Pandas DataFrame
         return pd.DataFrame(historical['result'])
@@ -70,11 +72,11 @@ and \"quote_currency\" is {self.quote_currency}")
             end_time))
 
     ## Get plotting historical data
-    #  @param start_date starting date of the data
-    #  @param end_date end date of the data
+    #  @param start_time starting date of the data
+    #  @param end_time end date of the data
     #  @param resolution of the data
-    def plot_historical(self, start_date=None, end_date=None, resolution=None):
-        df = self.historical_data(start_date, end_date, resolution)
+    def plot_historical(self, start_time=None, end_time=None, resolution=None):
+        df = self.historical_data(start_time, end_time, resolution)
         # Convert time to date
         df['date'] = pd.to_datetime(
             df['time'] / 1000, unit='s', origin='unix'
@@ -108,7 +110,7 @@ and \"quote_currency\" is {self.quote_currency}")
     #   @param side   the value can be "sell" or "buy"
     #   @param price  price of the order
     #   @param volume volume of the order
-    def placeOrder(self, side, price, volume):
+    def place_order(self, type, side, price, volume):
         ftx_client = FtxClient(
             api_key=self.api_key,
             api_secret=self.api_secret)
@@ -118,7 +120,8 @@ and \"quote_currency\" is {self.quote_currency}")
                 market=f"{self.base_currency}/{self.quote_currency}",
                 side=side,
                 price=price,
-                size=volume
+                size=volume,
+                type=type
             )
         except Exception as e:
             print(f'Error making order request: {e}')
@@ -126,7 +129,7 @@ and \"quote_currency\" is {self.quote_currency}")
         return order_result
 
     ## Cancels the order
-    def cancelOrder(self, order):
+    def cancel_order(self, order):
         ftx_client = FtxClient(
             api_key=self.api_key,
             api_secret=self.api_secret)
@@ -138,10 +141,22 @@ and \"quote_currency\" is {self.quote_currency}")
         except Exception as e:
             print(f'Error cancelling order request: {e}')
 
-    ## Returns the market ask.
-    def marketAsk(self):
+    ## Returns the current price.
+    def get_current_price(self):
         request_url = f'{self.api_url}/{self.base_currency}/{self.quote_currency}'
         market = requests.get(request_url).json()
-        market_ask = market['result']['ask']
-        print(f"{self.base_currency}/{self.quote_currency} asking price = {market_ask}")
-        return market_ask
+        current_price = market['result']['price']
+        return current_price
+
+    ## Returns the orderbook of bids and asks.
+    def get_orderbook(self, depth):
+        request_url = f'{self.api_url}/{self.base_currency}/\
+{self.quote_currency}/orderbook?depth={depth}'
+        data = requests.get(request_url).json()
+        orderbook = data['result']
+        orderbook_bids = pd.DataFrame(orderbook['bids'])
+        orderbook_asks = pd.DataFrame(orderbook['asks'])
+        orderbook_bids.columns = ['price', 'volume']
+        orderbook_asks.columns = ['price', 'volume']
+        orderbook_bids.sort_values(by='price', ascending=False)
+        return (orderbook_bids, orderbook_asks)

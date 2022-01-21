@@ -9,4 +9,8 @@ def show_confirm_box(message):
 
 
 def show_alert_box(message):
-    pyautogui.alert(message)
+    pyautogui.alert(text=message, title="Info")
+
+
+def show_error_box(message):
+    pyautogui.alert(text=message, title="Error")

@@ -38,11 +38,11 @@ class HelloBot(BotBase):
         market_structure = self._determine_market_structure(df)
         if market_structure == 'bullish':
             price = market_value + 100
-            order_result = self.placeOrder(
+            order_result = self.place_order(
                 side='buy', price=price, volume=amount_to_trade_USD / market_value)
         elif market_structure == 'bearish':
             price = market_value - 100
-            order_result = self.placeOrder(
+            order_result = self.place_order(
                 side='sell', price=price, volume=amount_to_trade_USD / market_value)
 
         if order_result is None:
@@ -64,14 +64,10 @@ class HelloBot(BotBase):
             # Each iteration the platform will evaluate tasks
             # (For example getting the current test data,
             # or getting current market, in production mode).
-            (running, df, timestamp) = self.evaluate()
+            # Custom trading logic, put your decision making within _trade()
+            (running, _, timestamp) = self.evaluate(self._trade)
             if not running:
                 break
-            ##########################
-
-            ##########################
-            # Custom trading logic, put your decision making within _trading()
-            self._trade(df)
             ##########################
 
             ##########################

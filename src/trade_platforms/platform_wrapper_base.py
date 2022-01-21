@@ -1,20 +1,28 @@
 from typing import List
+from enum import Enum
+
+
+# Enum to identify platforms
+class Platforms(Enum):
+    FTX = "FTX"
 
 
 class PlatformWrapper():
     def __init__(self, name):
         self.name = name
+        ## Wait time between cycles.
+        self.sleep_time = 2
 
-    def placeOrder(self):
+    def place_order(self):
         pass
 
     def plot_historical(self, start_date, end_date, resolution):
         pass
 
-    def cancelOrder(self):
+    def cancel_order(self):
         pass
 
-    def marketAsk(self):
+    def get_current_price(self):
         pass
 
     def evaluate(self):
@@ -40,3 +48,7 @@ class PlatformWrapper():
 
     def set_start_balance(self, balance_USD):
         pass
+
+    ## Sets the wait time between cycles when running the platform.
+    def set_wait_time(self, sleep_seconds):
+        self.sleep_time = sleep_seconds
