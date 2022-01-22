@@ -1,14 +1,14 @@
 # py-algo-trading-client
 Python based algo trading client, to do the money making for you.
 At the moment it connects to FTX trading platform, throught the python API.
-See the [API doc](https://docs.ftx.us/#overview)
+See the [API doc](https://docs.ftx.us/#overview)<br><br>
 !!This repo is under heavy development at the moment!!
 
 # Setup
 The setup is tailored to VS Code, but, if you just fire up the Docker container from the ```Dockerfile```
 you can use any IDE.
  
- VS Code steps:
+VS Code steps:
  - Install extensions Docker (Microsoft), Remote-containers (Microsoft)
  - Click in the green area in the bottom left corner (Open a Remote Window)
  - Reopen in container (Select from Dockerfile)
@@ -22,3 +22,6 @@ Jupyter notebook:
  - If you want to use the container but not VSCode run the following:
     - ```docker build -f Dockerfile -t trading_env:latest .```
     - ```docker run -it --env-file .env -p 8888:8888 -e DISPLAY=$DISPLAY -v /var/run/docker.sock:/var/run/docker.sock -v /tmp/.X11-unix:/tmp/.X11-unix trading_env:latest jupyter notebook --allow-root --no-browser --ip=0.0.0.0```
+
+# How to use
+Please open the tutorial jupyter file to learn more.

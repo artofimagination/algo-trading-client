@@ -17,17 +17,19 @@ class TestWrapper(ValidationWrapper):
         # Stores the test data set the wrapper will feed to the bot.
         self.test_data = None
         # Start time of test data playback
-        self.start = datetime(2021, 2, 1, 0, 0)
+        self.start_time = datetime(2021, 2, 1, 0, 0)
         # End time of test data playback.
         self.end = datetime(2021, 2, 2, 0, 0)
         # Test data location.
         self.test_data_location = None
         # Overall progress (for calculating progress percentage)
-        self.overall_progress = self.start
+        self.overall_progress = self.start_time
         # Data is stored in chunks (for example daily),
         # this progress count contains the progress
         # of processing a single chunk. It is reset to 0 on a new chunk.
         self.chunk_progress = 0
+        ## See @PlatformWrapper
+        self.allow_cycle_progress_print = False
         # Current chunk
         self.current_chunk = None
         # When replaying historical data it is possible that some frames are missing.
@@ -50,15 +52,33 @@ class TestWrapper(ValidationWrapper):
     def set_data_interval(self, test_data_location, start_time, end_time):
         self.test_data_location = test_data_location
         self.test_data = pd.HDFStore(self.test_data_location)
-        self.start = start_time
+        self.start_time = start_time
         self.end = end_time
-        self.overall_progress = self.start
+        self.overall_progress = self.start_time
         self.current_chunk = self.test_data[self.overall_progress.strftime("DF%Y%m%d%H")]
 
     ## Returns the historical test data.
     def historical_data(self, start_time, end_time, resolution):
+        start = pd.to_datetime(datetime.fromtimestamp(start_time))
         return self.candle_history[
-            self.candle_history['startTime'] >= pd.to_datetime(start_time)]
+            self.candle_history['startTime'] >= start]
+
+    # Updates the current cycle timestamp.
+    def update_cycle_timestamp(self):
+        self.cycle_timestamp = self.overall_progress
+
+    ## Returns the current market ask. In test mode
+    # That is the average of open and close values
+    def fetch_current_price(self):
+        return (self.current_data['open'] + self.current_data['close']) / 2.0
+
+    ## Returns the simulation start timestamp.
+    def get_start_timestamp(self):
+        return self.start_time
+
+    ## Fetches the orderbook from test data set.
+    def fetch_orderbook(self, depth):
+        return (None, None)
 
     ## Plots the historical data
     #  @param start_date Not used
@@ -89,32 +109,19 @@ class TestWrapper(ValidationWrapper):
         )
         fig.show()
 
-    ## Executes a market order action.
-    def _execute_market_action(self, order, execute_order):
-        execute_order(order['type'], self.current_price, order['size'])
-        return self._update_order(order, order['size'])
-
-    ## executes a limit order action.
-    def _execute_limit_action(self, order, execute_order):
-        execute_order(order['type'], order['price'], order['size'])
-        return self._update_order(order, order['size'])
-
     ## Executes sell/buy action on a single order.
+    #  @param order the single order that needs action.
     def _execute_single_order(self, order):
-        if order['type'] == 'market':
-            if order['side'] == 'buy':
-                return self._execute_market_action(order, self._execute_buy)
-            else:
-                return self._execute_market_action(order, self._execute_sell)
+        if order['side'] == 'buy':
+            self._execute_buy(order['type'], order['price'], order['size'])
+            return self._update_order(order, order['size'])
         else:
-            if order['side'] == 'buy':
-                return self._execute_limit_action(order, self._execute_buy)
-            else:
-                return self._execute_limit_action(order, self._execute_sell)
+            self._execute_sell(order['type'], order['price'], order['size'])
+            return self._update_order(order, order['size'])
 
     ## Evaluate orders.
-    #  Currently if it is a market order it will be executed on the current
-    #  candle data 'open' value and if it is limit order, it will
+    #  Currently if it is a market order it will be executed on the average of the current
+    #  candle data 'open', 'close' values and if it is limit order, it will
     #  action at order price if it is between the 'open' and 'close' values.
     def evaluate_orders(self):
         if self.get_current_price() >= self.lowest_order_price and \
@@ -122,53 +129,51 @@ class TestWrapper(ValidationWrapper):
             # Only interested in orders, those prices are withing the current candle.
             self.orders_of_interest = self.orders[
                 ((self.current_data['open'] <= self.current_data['close']) &
-                 (self.orders['price'] <= self.current_data['open']) &
-                 (self.orders['price'] >= self.current_data['close'])) |
-                ((self.current_data['open'] > self.current_data['close']) &
                  (self.orders['price'] >= self.current_data['open']) &
-                 (self.orders['price'] <= self.current_data['close']))]
+                 (self.orders['price'] <= self.current_data['close'])) |
+                ((self.current_data['open'] > self.current_data['close']) &
+                 (self.orders['price'] <= self.current_data['open']) &
+                 (self.orders['price'] >= self.current_data['close']))]
 
             self.orders_of_interest = \
                 self.orders_of_interest.apply(self._execute_single_order, axis=1)
 
             # Throw away closed orders to increase performance.
             self.orders = self.orders[
-                ((self.current_data['open'] >= self.current_data['close']) &
-                 ((self.orders['price'] > self.current_data['open']) |
-                 (self.orders['price'] < self.current_data['close']))) |
-                ((self.current_data['open'] < self.current_data['close']) &
+                ((self.current_data['open'] <= self.current_data['close']) &
                  ((self.orders['price'] < self.current_data['open']) |
-                 (self.orders['price'] > self.current_data['close'])))]
-
-    ## Returns the current market ask. In test mode
-    # That is the open value of the current candle.
-    def get_current_price(self):
-        return self.current_data['open']
-
-    ## Returns the simulation start timestamp.
-    def get_start_timestamp(self):
-        return self.start
+                 (self.orders['price'] > self.current_data['close']))) |
+                ((self.current_data['open'] > self.current_data['close']) &
+                 ((self.orders['price'] > self.current_data['open']) |
+                 (self.orders['price'] < self.current_data['close'])))]
 
     ## Evaluates test wrapper tasks.
+    #  @param trade is a function callback to the user implemented
+    #               trading or signalling logic.
     def evaluate(self, trade):
         begin = time.time()
         if not exists(self.test_data_location):
             show_error_box("Dataset does not exist")
-            return (False, None)
+            return (False, self.overall_progress)
 
+        # Finish simulation when it is at the end of the data set.
         if self.overall_progress > self.end:
-            return (False, None)
+            return (False, self.overall_progress)
 
-        percentage = ((self.overall_progress - self.start) /
-                      (self.end - self.start)) * 100
+        # Calculate progress.
+        percentage = ((self.overall_progress - self.start_time) /
+                      (self.end - self.start_time)) * 100
 
-        if self.overall_progress != self.start and \
+        ## Data set is broken down into chunks of approx 1400 rows
+        # This logic switches to the next chunk when the current one is processed.
+        if self.overall_progress != self.start_time and \
             self.overall_progress.hour in [0, 6, 12, 18] and \
             self.overall_progress.minute == 0 and \
                 self.overall_progress.second == 0:
             self.current_chunk = \
                 self.test_data[self.overall_progress.strftime("DF%Y%m%d%H")]
             self.chunk_progress = 0
+
         # If there are missing elements in the dataset use the previous data.
         if self.chunk_progress < len(self.current_chunk):
             self.current_data = self.current_chunk.loc[self.chunk_progress]
@@ -178,6 +183,7 @@ class TestWrapper(ValidationWrapper):
         self.current_data['startTime'] = pd.to_datetime(
             self.current_data['startTime'],
             format="%Y-%m-%dT%H:%M:%S+00:00")
+        # Accumulate candle history for potential user processing.
         self.candle_history = self.candle_history.append(self.current_data)
         self.chunk_progress += 1
         self.overall_progress += timedelta(seconds=15)
@@ -188,5 +194,4 @@ class TestWrapper(ValidationWrapper):
         print(f"{percentage:.3f}% \
 exec time: {end - begin:.3f}, date: {self.overall_progress}, orders: {len(self.orders)}")
 
-        return (True,
-                self.overall_progress)
+        return (True, self.overall_progress)

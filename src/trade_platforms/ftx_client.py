@@ -38,7 +38,8 @@ class FtxClient:
         signature_payload = f'{ts}{prepared.method}{prepared.path_url}'.encode()
         if prepared.body:
             signature_payload += prepared.body
-        signature = hmac.new(self._api_secret.encode(), signature_payload, 'sha256').hexdigest()
+        signature = hmac.new(
+            self._api_secret.encode(), signature_payload, 'sha256').hexdigest()
         request.headers['FTX-KEY'] = self._api_key
         request.headers['FTX-SIGN'] = signature
         request.headers['FTX-TS'] = str(ts)
@@ -69,16 +70,19 @@ class FtxClient:
         return self._get(f'markets/{market}/trades')
 
     def get_account_info(self) -> dict:
-        return self._get(f'account')
+        return self._get('account')
+
+    def get_wallet_balances(self) -> dict:
+        return self._get('wallet/balances')
 
     def get_open_orders(self, market: str = None) -> List[dict]:
-        return self._get(f'orders', {'market': market})
+        return self._get('orders', {'market': market})
     
     def get_order_history(self, market: str = None, side: str = None, order_type: str = None, start_time: float = None, end_time: float = None) -> List[dict]:
-        return self._get(f'orders/history', {'market': market, 'side': side, 'orderType': order_type, 'start_time': start_time, 'end_time': end_time})
+        return self._get('orders/history', {'market': market, 'side': side, 'orderType': order_type, 'start_time': start_time, 'end_time': end_time})
         
     def get_conditional_order_history(self, market: str = None, side: str = None, type: str = None, order_type: str = None, start_time: float = None, end_time: float = None) -> List[dict]:
-        return self._get(f'conditional_orders/history', {'market': market, 'side': side, 'type': type, 'orderType': order_type, 'start_time': start_time, 'end_time': end_time})
+        return self._get('conditional_orders/history', {'market': market, 'side': side, 'type': type, 'orderType': order_type, 'start_time': start_time, 'end_time': end_time})
 
     def modify_order(
         self, existing_order_id: Optional[str] = None,

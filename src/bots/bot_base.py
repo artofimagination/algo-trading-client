@@ -1,10 +1,15 @@
-from enum import Enum
-import sys
-from typing import List
+from ssl import CHANNEL_BINDING_TYPES
 from popup import show_confirm_box, show_alert_box
-
 from trade_platforms.test_wrapper import TestWrapper
 from trade_platforms.validation_wrapper import ValidationWrapper
+
+import copy
+from datetime import timedelta
+from enum import Enum
+import pandas as pd
+import plotly.express as px
+import sys
+from typing import List
 
 
 # Defines the different running modes.
@@ -16,6 +21,31 @@ class Mode(Enum):
     Validation = 1
     # Live mode with real platform actions (!!!Use it with care, it can cost you a lot!!!)
     Production = 2
+
+
+# Possible plot options.
+class PlotOptions(Enum):
+    # Balance in case the inital balance was traded
+    # once at the beginning then traded back at the end
+    BalanceIfTradedOnce = 0x0001
+    # Start balance
+    StartBalance = 0x0002
+    # Cumulative quote currency value of all wallets
+    BalanceCumulative = 0x0004
+    # Quote currency wallet total
+    QuoteCurrencyTotal = 0x0008
+    # Quote currency traded amount within time window
+    QuoteCurrencyInTimeWindow = 0x0010
+    # Quote currency free amount
+    QuoteCurrencyFree = 0x0020
+    # Base currency traded amount within time window
+    BaseCurrencyBalanceInWindow = 0x0040
+    # Base currency total amount.
+    BaseCurrencyTotal = 0x0080
+    # Base currency free amount.
+    BaseCurrencyFree = 0x0100
+    # Candle price history
+    Candles = 0x0200
 
 
 ## Base class to handle generic bot behaviour.
@@ -41,6 +71,23 @@ class BotBase():
                 not show_confirm_box("Production Mode! Are you sure?"):
             sys.exit(0)
 
+        # Plotting data
+        self.BTC_per_window_of_interest = list()
+        self.balance_USD_per_window_of_interest = list()
+        self.previous_balances = None
+        self.previous_timestamp = None
+        self.start_balance = 0
+        self.fee = 0
+        self.start_price = 0
+        self.output_quote = pd.DataFrame({
+            "day": [],
+            "value": [],
+            "type": []})
+        self.output_base = pd.DataFrame({
+            "day": [],
+            "value": [],
+            "type": []})
+
     ## Selects the appropriate platform client wrapper.
     def _select_platform_wrapper(self, market):
         if self.mode == Mode.Production:
@@ -56,6 +103,119 @@ class BotBase():
         elif self.mode == Mode.Test:
             return self.testWrapper
 
+    ## Plots the selected data.
+    # @param timestamp timestamp at the time of plotting.
+    def plot_data(self, timestamp):
+        self.plot_historical(
+            start_date=self.get_start_timestamp().timestamp(),
+            end_date=timestamp.timestamp(),
+            resolution=15)
+
+        fig = px.line(
+            self.output_quote,
+            x="day",
+            y="value",
+            title='Gain over time USD',
+            color="type")
+        fig.show()
+
+        fig = px.line(
+            self.output_base,
+            x="day",
+            y="value",
+            title='Gain over time BTC',
+            color="type")
+        fig.show()
+
+    ## Initializes plot data.
+    def init_plot_data(self):
+        current_balances = self.get_balances()
+        self.previous_balances = copy.deepcopy(current_balances)
+        self.previous_timestamp = self.get_start_timestamp()
+        self.start_balance = copy.deepcopy(self.get_balances())
+        self.fee = self.get_account_info()['takerFee']
+        self.start_price = self.get_current_price()
+
+    ## Accumulates plot data.
+    #  @param timestamp timestamp at the time of accumulation.
+    def accumulate_plot_data(self, timestamp, window_of_interest_seconds=15):
+        # Generic tasks, collecting plot data within the window of interest
+        if (timestamp - self.previous_timestamp >= timedelta(
+                seconds=window_of_interest_seconds)):
+            self.BTC_per_window_of_interest.append(0)
+            self.balance_USD_per_window_of_interest.append(0)
+            current_balances = self.get_balances()
+            length = len(self.BTC_per_window_of_interest) - 1
+            self.BTC_per_window_of_interest[length] = \
+                current_balances['BTC']['total'] - \
+                self.previous_balances['BTC']['total']
+            length = len(self.balance_USD_per_window_of_interest) - 1
+            self.balance_USD_per_window_of_interest[length] = \
+                current_balances['USD']['total'] - \
+                self.previous_balances['USD']['total']
+            self.previous_timestamp = timestamp
+            self.previous_balances = copy.deepcopy(current_balances)
+
+            length = len(self.BTC_per_window_of_interest) - 1
+            self.output_base.loc[len(self.output_base)] = [
+                timestamp,
+                self.BTC_per_window_of_interest[length],
+                "BTC_window"]
+
+            self.output_base.loc[len(self.output_base)] = [
+                timestamp,
+                current_balances['BTC']['total'],
+                "BTC_cumulative"]
+
+            self.output_base.loc[len(self.output_base)] = [
+                timestamp,
+                current_balances['BTC']['free'],
+                "BTC_free"]
+
+            length = len(self.balance_USD_per_window_of_interest) - 1
+            self.output_quote.loc[len(self.output_quote)] = [
+                timestamp,
+                self.balance_USD_per_window_of_interest[length],
+                "USD_window"]
+
+            self.output_quote.loc[len(self.output_quote)] = [
+                timestamp,
+                current_balances['USD']['total'],
+                "USD_cumulative"]
+
+            self.output_quote.loc[len(self.output_quote)] = [
+                timestamp,
+                current_balances['BTC']['usdValue'],
+                "BTC_USD_value"]
+
+            total = \
+                current_balances['BTC']['usdValue'] + \
+                current_balances['USD']['total']
+            self.output_quote.loc[len(self.output_quote)] = [
+                timestamp,
+                total,
+                "Total_wealth_USD"]
+
+            self.output_quote.loc[len(self.output_quote)] = [
+                timestamp,
+                current_balances['USD']['free'],
+                "USD_free"]
+
+            self.output_quote.loc[len(self.output_quote)] = [
+                timestamp,
+                self.start_balance['USD']['total'],
+                "USD_start"]
+
+            fee_deduced = \
+                self.start_balance['USD']['total'] - \
+                self.start_balance['USD']['total'] * self.fee
+            value_if_sold_once = (fee_deduced / self.start_price)
+            fee_deduced = value_if_sold_once - value_if_sold_once * self.fee
+            self.output_quote.loc[len(self.output_quote)] = [
+                timestamp,
+                fee_deduced * self.get_current_price(),
+                "USD_value_if_sold_once"]
+
     ## Places an order.
     def place_order(self, market=None, type=None, side=None, price=None, volume=None):
         return self._select_platform_wrapper(market).place_order(
@@ -64,6 +224,14 @@ class BotBase():
     ## Cancels the order.
     def cancel_order(self, market=None, order=None):
         return self._select_platform_wrapper(market).cancel_order(order)
+
+    ## Cancels the order.
+    def get_cycle_timestamp(self):
+        return self._select_platform_wrapper(None).get_cycle_timestamp()
+
+    ## Returns the orderbook
+    def get_orderbook(self):
+        return self._select_platform_wrapper(None).get_orderbook()
 
     ## Returns the current price.
     def get_current_price(self, market=None):

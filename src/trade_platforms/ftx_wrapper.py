@@ -1,7 +1,6 @@
 from dotenv import load_dotenv
 import os
 import pandas as pd
-import plotly.graph_objects as go
 import requests
 from typing import List
 from trade_platforms.ftx_client import FtxClient
@@ -64,47 +63,15 @@ and \"quote_currency\" is {self.quote_currency}")
             order_type: str = None,
             start_time: float = None,
             end_time: float = None) -> List[dict]:
-        return pd.DataFrame(self.get_order_history(
+        ftx_client = FtxClient(
+            api_key=self.api_key,
+            api_secret=self.api_secret)
+        return pd.DataFrame(ftx_client.get_order_history(
             f"{self.base_currency}/{self.quote_currency}",
             side,
             order_type,
             start_time,
             end_time))
-
-    ## Get plotting historical data
-    #  @param start_time starting date of the data
-    #  @param end_time end date of the data
-    #  @param resolution of the data
-    def plot_historical(self, start_time=None, end_time=None, resolution=None):
-        df = self.historical_data(start_time, end_time, resolution)
-        # Convert time to date
-        df['date'] = pd.to_datetime(
-            df['time'] / 1000, unit='s', origin='unix'
-        )
-        # Remove unnecessary columns
-        df.drop(['startTime', 'time'], axis=1, inplace=True)
-
-        fig = go.Figure()
-        fig.update_layout(
-            title={
-                'text': f"{self.base_currency}/{self.quote_currency}",
-                'x': 0.5,
-                'xanchor': 'center'
-            },
-            xaxis_title="Date",
-            yaxis_title="Price",
-            xaxis_rangeslider_visible=False
-        )
-        fig.add_trace(
-            go.Candlestick(
-                x=df['startTime'],
-                open=df['open'],
-                high=df['high'],
-                low=df['low'],
-                close=df['close']
-            )
-        )
-        fig.show()
 
     ## Places the order
     #   @param side   the value can be "sell" or "buy"
@@ -141,15 +108,33 @@ and \"quote_currency\" is {self.quote_currency}")
         except Exception as e:
             print(f'Error cancelling order request: {e}')
 
-    ## Returns the current price.
-    def get_current_price(self):
+    ## Gets the current price from the platform wrapper.
+    def fetch_current_price(self):
         request_url = f'{self.api_url}/{self.base_currency}/{self.quote_currency}'
         market = requests.get(request_url).json()
         current_price = market['result']['price']
         return current_price
 
+    ## Returns all wallet balances.
+    def get_balances(self):
+        ftx_client = FtxClient(
+            api_key=self.api_key,
+            api_secret=self.api_secret)
+        data = ftx_client.get_wallet_balances()
+        wallets = dict()
+        for wallet in data:
+            wallets[wallet['coin']] = wallet
+        return wallets
+
+    ## Returns the account info.
+    def get_account_info(self):
+        ftx_client = FtxClient(
+            api_key=self.api_key,
+            api_secret=self.api_secret)
+        return ftx_client.get_account_info()
+
     ## Returns the orderbook of bids and asks.
-    def get_orderbook(self, depth):
+    def fetch_orderbook(self, depth):
         request_url = f'{self.api_url}/{self.base_currency}/\
 {self.quote_currency}/orderbook?depth={depth}'
         data = requests.get(request_url).json()

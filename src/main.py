@@ -1,12 +1,13 @@
 from trade_platforms.ftx_wrapper import FTX
 from trade_platforms.platform_wrapper_base import Platforms
 from dataset_generator import generate_candle_historical_dataset
-from bots.cascade_order_bot import CascadeOrderBot
+from bots.hello_bot import HelloBot
 from bots.bot_base import Mode
 
 from datetime import datetime
 
-if __name__ == "__main__":
+
+def run_hello_bot():
     platform = {
         'platform_type': Platforms.FTX,
         'base_currency': 'BTC',
@@ -18,7 +19,7 @@ if __name__ == "__main__":
         end_time=datetime(2022, 1, 1),
         resolution_sec=15)
 
-    bot = CascadeOrderBot(platforms=[
+    bot = HelloBot(platforms=[
         FTX(base_currency="BTC", quote_currency="USD")
     ],
         mode=Mode.Test)
@@ -29,7 +30,12 @@ if __name__ == "__main__":
             start_time=datetime(2021, 1, 1, 0, 0),
             end_time=datetime(2021, 1, 1, 3, 0)
         )
-    bot.set_start_balance(200)
-    bot.set_wait_time(wait_time_seconds=0)
+    if bot.mode != Mode.Production:
+        bot.set_start_balance(200)
+    bot.set_wait_time(wait_time_seconds=12)
     bot.run()
+
+
+if __name__ == "__main__":
+    run_hello_bot()
     print("Exiting application...")
