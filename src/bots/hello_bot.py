@@ -1,45 +1,51 @@
 from bots.bot_base import Mode, BotBase
 
-from random import random
-
 
 ## Exmaple trade bot for tutorial purposes.
 # It is suggested to use, the following basic structure
 # when writing your own bot.
+# When creating your custom bot, just copy this over and rename the class
+# to your desired name
 class HelloBot(BotBase):
-    ## When creating your custom bot, just copy this over and rename
-    # to your desired name
     def __init__(self, platforms, mode=Mode.Test):
         super(HelloBot, self).__init__(platforms, mode)
+        self.count = 0
 
-    ## Implement your way of market structure detector
-    # This example decide purely randomly.
-    def _determine_market_structure(self):
-        rand = random()
-        if rand > 0.5:
+    ## Implement your way of market bias detector
+    #  This example will switch bias every cycle.
+    def _determine_bias(self):
+        self.count += 1
+        if self.count % 2 == 1:
             return 'bullish'
         return 'bearish'
 
     ## This function should do the main trading logic.
-    def _trade(self, df):
-        market_value = df['market']
-        current_balances = self.get_balances()
-        amount_to_trade_USD = current_balances / 10
-        market_structure = self._determine_market_structure(df)
+    def _trade(self):
+        market_value = self.get_current_price()
+        current_balance = self.get_balances()['USD']['total']
+        amount_to_trade_USD = current_balance / 10
+        market_structure = self._determine_bias()
         if market_structure == 'bullish':
-            price = market_value + 100
             order_result = self.place_order(
-                side='buy', price=price, volume=amount_to_trade_USD / market_value)
+                type='market',
+                side='sell',
+                price=market_value,
+                volume=amount_to_trade_USD / market_value)
         elif market_structure == 'bearish':
-            price = market_value - 100
             order_result = self.place_order(
-                side='sell', price=price, volume=amount_to_trade_USD / market_value)
+                type='market',
+                side='buy',
+                price=market_value,
+                volume=amount_to_trade_USD / market_value)
 
         if order_result is None:
-            print('Order failed. Balance has not enough free amount')
+            # Order failed. Balance has not enough free amount'
+            pass
+        return True
 
     # Load your test data set or any local variables, members if needed.
     def _setup(self):
+        self.count = 0
         # Setup the main loop with an initial evaluation.
         (running, timestamp) = self.evaluate(self._trade)
         # Optional: Setup plot data
@@ -56,7 +62,7 @@ class HelloBot(BotBase):
                 # (For example getting the current test data,
                 # or getting current market, in production mode).
                 # Custom trading logic, put your decision making within _trade()
-                (running, _, timestamp) = self.evaluate(self._trade)
+                (running, timestamp) = self.evaluate(self._trade)
                 if not running:
                     break
                 ##########################

@@ -19,15 +19,15 @@ class TestWrapper(ValidationWrapper):
         # Start time of test data playback
         self.start_time = datetime(2021, 2, 1, 0, 0)
         # End time of test data playback.
-        self.end = datetime(2021, 2, 2, 0, 0)
+        self.end_time = datetime(2021, 2, 2, 0, 0)
         # Test data location.
         self.test_data_location = None
         # Overall progress (for calculating progress percentage)
-        self.overall_progress = self.start_time
+        self.time_progress = self.start_time
         # Data is stored in chunks (for example daily),
         # this progress count contains the progress
         # of processing a single chunk. It is reset to 0 on a new chunk.
-        self.chunk_progress = 0
+        self.row_progress = 0
         ## See @PlatformWrapper
         self.allow_cycle_progress_print = False
         # Current chunk
@@ -51,11 +51,13 @@ class TestWrapper(ValidationWrapper):
     #  @param end_time test data feed end time
     def set_data_interval(self, test_data_location, start_time, end_time):
         self.test_data_location = test_data_location
-        self.test_data = pd.HDFStore(self.test_data_location)
+        self.test_data = pd.HDFStore(self.test_data_location)['data']
         self.start_time = start_time
-        self.end = end_time
-        self.overall_progress = self.start_time
-        self.current_chunk = self.test_data[self.overall_progress.strftime("DF%Y%m%d%H")]
+        self.end_time = end_time
+        if self.start_time == self.end_time:
+            raise Exception(
+                "set_data_interval(): Start and end times are the same")
+        self.time_progress = self.start_time
 
     ## Returns the historical test data.
     def historical_data(self, start_time, end_time, resolution):
@@ -65,7 +67,7 @@ class TestWrapper(ValidationWrapper):
 
     # Updates the current cycle timestamp.
     def update_cycle_timestamp(self):
-        self.cycle_timestamp = self.overall_progress
+        self.cycle_timestamp = self.time_progress
 
     ## Returns the current market ask. In test mode
     # That is the average of open and close values
@@ -154,44 +156,26 @@ class TestWrapper(ValidationWrapper):
         begin = time.time()
         if not exists(self.test_data_location):
             show_error_box("Dataset does not exist")
-            return (False, self.overall_progress)
+            return (False, self.time_progress)
 
         # Finish simulation when it is at the end of the data set.
-        if self.overall_progress > self.end:
-            return (False, self.overall_progress)
+        if self.time_progress > self.end_time:
+            return (False, self.time_progress)
 
         # Calculate progress.
-        percentage = ((self.overall_progress - self.start_time) /
-                      (self.end - self.start_time)) * 100
+        percentage = ((self.time_progress - self.start_time) /
+                      (self.end_time - self.start_time)) * 100
 
-        ## Data set is broken down into chunks of approx 1400 rows
-        # This logic switches to the next chunk when the current one is processed.
-        if self.overall_progress != self.start_time and \
-            self.overall_progress.hour in [0, 6, 12, 18] and \
-            self.overall_progress.minute == 0 and \
-                self.overall_progress.second == 0:
-            self.current_chunk = \
-                self.test_data[self.overall_progress.strftime("DF%Y%m%d%H")]
-            self.chunk_progress = 0
-
-        # If there are missing elements in the dataset use the previous data.
-        if self.chunk_progress < len(self.current_chunk):
-            self.current_data = self.current_chunk.loc[self.chunk_progress]
-        else:
-            self.missing_element_count += 1
-            print(f"Missing element in the data set. Count: {self.missing_element_count}")
-        self.current_data['startTime'] = pd.to_datetime(
-            self.current_data['startTime'],
-            format="%Y-%m-%dT%H:%M:%S+00:00")
+        self.current_data = self.test_data.iloc[self.row_progress]
         # Accumulate candle history for potential user processing.
         self.candle_history = self.candle_history.append(self.current_data)
-        self.chunk_progress += 1
-        self.overall_progress += timedelta(seconds=15)
+        self.row_progress += 1
+        self.time_progress += timedelta(seconds=15)
 
-        super().evaluate(trade)
+        (running, _) = super().evaluate(trade)
 
         end = time.time()
         print(f"{percentage:.3f}% \
-exec time: {end - begin:.3f}, date: {self.overall_progress}, orders: {len(self.orders)}")
+exec time: {end - begin:.3f}, date: {self.time_progress}, orders: {len(self.orders)}")
 
-        return (True, self.overall_progress)
+        return (running, self.time_progress)

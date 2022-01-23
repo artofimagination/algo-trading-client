@@ -24,4 +24,4 @@ Jupyter notebook:
     - ```docker run -it --env-file .env -p 8888:8888 -e DISPLAY=$DISPLAY -v /var/run/docker.sock:/var/run/docker.sock -v /tmp/.X11-unix:/tmp/.X11-unix trading_env:latest jupyter notebook --allow-root --no-browser --ip=0.0.0.0```
 
 # How to use
-Please open the tutorial jupyter file to learn more.
+Please open the ```tutorial.ipynb``` jupyter file to learn more.

@@ -8,6 +8,8 @@ from datetime import datetime
 
 
 def run_hello_bot():
+    simulation_start = datetime(2020, 1, 1, 0, 0)
+    simulation_end = datetime(2020, 1, 1, 0, 2)
     platform = {
         'platform_type': Platforms.FTX,
         'base_currency': 'BTC',
@@ -15,8 +17,8 @@ def run_hello_bot():
     }
     dataset_file = generate_candle_historical_dataset(
         platform=platform,
-        start_time=datetime(2020, 1, 1),
-        end_time=datetime(2022, 1, 1),
+        start_time=simulation_start,
+        end_time=simulation_end,
         resolution_sec=15)
 
     bot = HelloBot(platforms=[
@@ -27,12 +29,12 @@ def run_hello_bot():
     if bot.mode == Mode.Test:
         bot.set_test_data_interval(
             test_data_location=dataset_file,
-            start_time=datetime(2021, 1, 1, 0, 0),
-            end_time=datetime(2021, 1, 1, 3, 0)
+            start_time=simulation_start,
+            end_time=simulation_end
         )
     if bot.mode != Mode.Production:
         bot.set_start_balance(200)
-    bot.set_wait_time(wait_time_seconds=12)
+    bot.set_wait_time(wait_time_seconds=0)
     bot.run()
 
 

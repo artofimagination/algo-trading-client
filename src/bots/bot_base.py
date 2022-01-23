@@ -1,4 +1,3 @@
-from ssl import CHANNEL_BINDING_TYPES
 from popup import show_confirm_box, show_alert_box
 from trade_platforms.test_wrapper import TestWrapper
 from trade_platforms.validation_wrapper import ValidationWrapper

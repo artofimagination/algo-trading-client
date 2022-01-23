@@ -116,8 +116,8 @@ time: {self.cycle_timestamp}, orders: {len(self.get_order_history())}")
         self.current_price = self.fetch_current_price()
         if self.sleep_time > 0:
             time.sleep(self.sleep_time)
-        trade()
-        return (True, self.cycle_timestamp)
+        running = trade()
+        return (running, self.cycle_timestamp)
 
     ## Interface for get_order_history
     def get_order_history(

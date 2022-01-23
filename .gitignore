@@ -2,3 +2,4 @@
 logs
 __pycache__
 src/bots/data
+.ipynb_checkpoints
