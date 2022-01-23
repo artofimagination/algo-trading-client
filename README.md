@@ -25,3 +25,5 @@ Jupyter notebook:
 
 # How to use
 Please open the ```tutorial.ipynb``` jupyter file to learn more.
+
+There are various functions to support building a bot, please checkout ```api.ipynb``` for more info. (This doc is yet incomplete)
