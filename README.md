@@ -1,5 +1,5 @@
 # py-algo-trading-client
-Python based algo trading client, to do the money making for you.
+Python based algo trading client, that allows to accomodate trading/signalling algorithms. 
 At the moment it connects to FTX trading platform, throught the python API.
 See the [API doc](https://docs.ftx.us/#overview)<br><br>
 !!This repo is under heavy development at the moment!!
