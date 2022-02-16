@@ -12,11 +12,11 @@ import copy
 def plotLineChart(df):
     figures = list()
     figures.append(
-        px.line(df, x="day", y="mean_candle_height", title='Candle height mean per day'))
+        px.line(df, x="timestamp", y="mean_candle_height", title='Candle height mean per day'))
     figures.append(
-        px.line(df, x="day", y="mean_price", title='Price mean per day'))
+        px.line(df, x="timestamp", y="mean_price", title='Price mean per day'))
     figures.append(
-        px.line(df, x="day", y="count", title='Price change counts', color="group"))
+        px.line(df, x="timestamp", y="count", title='Price change counts', color="group"))
     # For as many traces that exist per Express figure,
     # get the traces from each plot and store them in an array.
     # This is essentially breaking down the Express fig into it's traces
@@ -65,7 +65,7 @@ dataset_ftx_20200101-20220101_minutes_res_day_chunks.h5'
         timestamp = start
         store = pd.HDFStore(self.FTX_DATASET_PATH)
         output = pd.DataFrame({
-                              "day": [],
+                              "timestamp": [],
                               "group": [],
                               "mean_candle_height": [],
                               "mean_price": [],
@@ -340,11 +340,11 @@ dataset_ftx_20200101-20220101_minutes_res_day_chunks.h5'
             return
 
         output_USD = pd.DataFrame({
-                                  "day": [],
+                                  "timestamp": [],
                                   "value": [],
                                   "type": []})
         output_BTC = pd.DataFrame({
-                                  "day": [],
+                                  "timestamp": [],
                                   "value": [],
                                   "type": []})
 
@@ -425,7 +425,7 @@ dataset_ftx_20200101-20220101_minutes_res_day_chunks.h5'
 
         fig = px.bar(
             output_USD,
-            x="day",
+            x="timestamp",
             y="value",
             title='Gain over time USD',
             barmode='group',
@@ -434,7 +434,7 @@ dataset_ftx_20200101-20220101_minutes_res_day_chunks.h5'
 
         fig = px.bar(
             output_BTC,
-            x="day",
+            x="timestamp",
             y="value",
             title='Gain over time BTC',
             barmode='group',

@@ -5,17 +5,16 @@ See the [API doc](https://docs.ftx.us/#overview)<br><br>
 !!This repo is under heavy development at the moment!!
 
 # Setup
-The setup is tailored to VS Code, but, if you just fire up the Docker container from the ```Dockerfile```
-you can use any IDE.
- 
+This setup assumes that VS code and docker are installed.
+
 VS Code steps:
  - Install extensions Docker (Microsoft), Remote-containers (Microsoft)
  - Click in the green area in the bottom left corner (Open a Remote Window)
+ - Don't forget to set your API keys in a freshly created ```.env``` file see ```.env.example``` as an example
+ - NEVER PUSH THE ```.env``` IN YOUR REMOTE REPO. (I added it to gitignore to make it harder :) )
  - Reopen in container (Select from Dockerfile)
  - Run ```xhost local:docker``` in the host command line (this will allow the GUI forwarding from the container)
  - If all goes well, you just need press F5 and it should start build and then the application with Debug.
- - Don't forget to set your API keys in a freshly created ```.env``` file see ```.env.example``` as an example
- - NEVER PUSH THE ```.env``` IN YOUR REMOTE REPO. (I added it to gitignore to make it harder :) )
 
 Jupyter notebook:
  - If you are using VS Code as well, just run ```jupyter notebook --allow-root``` in the VS Code terminal once the above steps are done

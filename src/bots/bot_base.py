@@ -45,6 +45,14 @@ class PlotOptions(Enum):
     BaseCurrencyFree = 0x0100
     # Candle price history
     Candles = 0x0200
+    # USD price plot
+    USDPlot = 0x0400
+    # BTC plots
+    BTCPlot = 0x0800
+
+
+def _isPlotOption(config, option):
+    return config & option.value == option.value
 
 
 ## Base class to handle generic bot behaviour.
@@ -76,14 +84,16 @@ class BotBase():
         self.previous_balances = None
         self.previous_timestamp = None
         self.start_balance = 0
+        self.start_balance_BTC = 0
         self.fee = 0
         self.start_price = 0
+        self.initial_balance_base_qoute_ratio = 1.0
         self.output_quote = pd.DataFrame({
-            "day": [],
+            "timestamp": [],
             "value": [],
             "type": []})
         self.output_base = pd.DataFrame({
-            "day": [],
+            "timestamp": [],
             "value": [],
             "type": []})
 
@@ -104,27 +114,30 @@ class BotBase():
 
     ## Plots the selected data.
     # @param timestamp timestamp at the time of plotting.
-    def plot_data(self, timestamp):
-        self.plot_historical(
-            start_date=self.get_start_timestamp().timestamp(),
-            end_date=timestamp.timestamp(),
-            resolution=15)
+    def plot_data(self, timestamp, plots=0, config=0):
+        if _isPlotOption(plots, PlotOptions.Candles):
+            self.plot_historical(
+                start_date=self.get_start_timestamp().timestamp(),
+                end_date=timestamp.timestamp(),
+                resolution=15)
 
-        fig = px.line(
-            self.output_quote,
-            x="day",
-            y="value",
-            title='Gain over time USD',
-            color="type")
-        fig.show()
+        if _isPlotOption(plots, PlotOptions.USDPlot):
+            fig = px.line(
+                self.output_quote,
+                x="timestamp",
+                y="value",
+                title='Gain over time USD',
+                color="type")
+            fig.show()
 
-        fig = px.line(
-            self.output_base,
-            x="day",
-            y="value",
-            title='Gain over time BTC',
-            color="type")
-        fig.show()
+        if _isPlotOption(plots, PlotOptions.BTCPlot):
+            fig = px.line(
+                self.output_base,
+                x="timestamp",
+                y="value",
+                title='Gain over time BTC',
+                color="type")
+            fig.show()
 
     ## Initializes plot data.
     def init_plot_data(self):
@@ -137,7 +150,7 @@ class BotBase():
 
     ## Accumulates plot data.
     #  @param timestamp timestamp at the time of accumulation.
-    def accumulate_plot_data(self, timestamp, window_of_interest_seconds=15):
+    def accumulate_plot_data(self, timestamp, window_of_interest_seconds=15, config=0):
         # Generic tasks, collecting plot data within the window of interest
         if (timestamp - self.previous_timestamp >= timedelta(
                 seconds=window_of_interest_seconds)):
@@ -170,6 +183,26 @@ class BotBase():
                 timestamp,
                 current_balances['BTC']['free'],
                 "BTC_free"]
+
+            self.output_base.loc[len(self.output_base)] = [
+                timestamp,
+                self.start_balance_BTC,
+                "BTC_start"]
+            start_balance_BTC = \
+                self.initial_balance_base_qoute_ratio *\
+                self.start_balance['USD']['total'] / self.get_current_price()
+
+            start_balance_USD = \
+                self.initial_balance_base_qoute_ratio * self.start_balance['USD']['total']
+            fee_deduced = \
+                start_balance_USD - \
+                start_balance_USD * self.fee
+            value_if_sold_once = (fee_deduced / self.start_price)
+            volume = start_balance_BTC + value_if_sold_once
+            self.output_base.loc[len(self.output_base)] = [
+                timestamp,
+                volume,
+                "BTC_if_all_kept"]
 
             length = len(self.balance_USD_per_window_of_interest) - 1
             self.output_quote.loc[len(self.output_quote)] = [
@@ -206,51 +239,61 @@ class BotBase():
                 "USD_start"]
 
             fee_deduced = \
-                self.start_balance['USD']['total'] - \
-                self.start_balance['USD']['total'] * self.fee
-            value_if_sold_once = (fee_deduced / self.start_price)
-            fee_deduced = value_if_sold_once - value_if_sold_once * self.fee
+                (value_if_sold_once - value_if_sold_once * self.fee) + start_balance_BTC
             self.output_quote.loc[len(self.output_quote)] = [
                 timestamp,
                 fee_deduced * self.get_current_price(),
                 "USD_value_if_sold_once"]
 
-    ## Places an order.
+    # API: Sometimes, we want to start with a mixed balanced, this determines,
+    # how much is base and how much is in quote currency at the start of the simulation
+    def set_initial_balance_base_qoute_ratio(self, ratio):
+        if self.mode != Mode.Test and self.mode != Mode.Validation:
+            show_alert_box("You are using set_initial_balance_base_qoute_ratio(). \
+  It does not do anything in production mode")
+            return
+        self.initial_balance_base_qoute_ratio = ratio
+
+    ## API: Places an order.
     def place_order(self, market=None, type=None, side=None, price=None, volume=None):
         return self._select_platform_wrapper(market).place_order(
             type, side, price, volume)
 
-    ## Cancels the order.
+    ## API: Cancels the order.
     def cancel_order(self, market=None, order=None):
         return self._select_platform_wrapper(market).cancel_order(order)
 
-    ## Cancels the order.
+    ## API: Cancels the order.
     def get_cycle_timestamp(self):
         return self._select_platform_wrapper(None).get_cycle_timestamp()
 
-    ## Returns the orderbook
+    ## API: Appends additional info to the cyclic print
+    def append_to_cyclic_message(self, message):
+        return self._select_platform_wrapper(None).append_to_cyclic_message(message)
+
+    ## API: Returns the orderbook
     def get_orderbook(self):
         return self._select_platform_wrapper(None).get_orderbook()
 
-    ## Returns the current price.
+    ## API: Returns the current price.
     def get_current_price(self, market=None):
         return self._select_platform_wrapper(market).get_current_price()
 
-    ## Returns the market data.
+    ## API: Returns the market data.
     def set_wait_time(self, market=None, wait_time_seconds=0):
         return self._select_platform_wrapper(market).set_wait_time(wait_time_seconds)
 
-    ## Returns the market data.
+    ## API: Returns the market data.
     def market_data(self, market=None):
         return self._select_platform_wrapper(market).market_data()
 
-    ## Returns the historical data.
+    ## API: Returns the historical data.
     def historical_data(
             self, market=None, start_time=None, end_time=None, resolution=60 * 60 * 24):
         return self._select_platform_wrapper(market).historical_data(
             start_time, end_time, resolution)
 
-    ## Returns the order history.
+    ## API: Returns the order history.
     def get_order_history(
             self,
             market=None,
@@ -261,7 +304,7 @@ class BotBase():
         return self._select_platform_wrapper(market).get_order_history(
             side, order_type, start_time, end_time)
 
-    ## Plot historical data
+    ## API: Plot historical data
     def plot_historical(
             self, market=None, start_date=None, end_date=None, resolution=None):
         return self._select_platform_wrapper(market).plot_historical(
@@ -295,15 +338,15 @@ It does not do anything in production mode")
             return
         self.testWrapper.set_start_balance(balance_USD)
 
-    ## Gets the starting timestamp of the bot execution.
+    ## API: Gets the starting timestamp of the bot execution.
     def get_start_timestamp(self):
         return self._select_platform_wrapper(None).get_start_timestamp()
 
-    ## Returns the account info.
+    ## API: Returns the account info.
     def get_account_info(self, market=None):
         return self._select_platform_wrapper(market).get_account_info()
 
-    ## Returns the balances.
+    ## API: Returns the balances.
     def get_balances(self, market=None):
         return self._select_platform_wrapper(market).get_balances()
 

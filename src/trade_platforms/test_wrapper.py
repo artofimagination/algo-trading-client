@@ -52,12 +52,16 @@ class TestWrapper(ValidationWrapper):
     def set_data_interval(self, test_data_location, start_time, end_time):
         self.test_data_location = test_data_location
         self.test_data = pd.HDFStore(self.test_data_location)['data']
+        self.test_data = self.test_data.reset_index(drop=True)
         self.start_time = start_time
         self.end_time = end_time
         if self.start_time == self.end_time:
             raise Exception(
                 "set_data_interval(): Start and end times are the same")
         self.time_progress = self.start_time
+        start = pd.to_datetime(start_time)
+        self.row_progress = \
+            self.test_data.index[self.test_data['startTime'] == start].values[0]
 
     ## Returns the historical test data.
     def historical_data(self, start_time, end_time, resolution):
@@ -115,10 +119,10 @@ class TestWrapper(ValidationWrapper):
     #  @param order the single order that needs action.
     def _execute_single_order(self, order):
         if order['side'] == 'buy':
-            self._execute_buy(order['type'], order['price'], order['size'])
+            self._execute_buy(order['price'], order['size'])
             return self._update_order(order, order['size'])
         else:
-            self._execute_sell(order['type'], order['price'], order['size'])
+            self._execute_sell(order['price'], order['size'])
             return self._update_order(order, order['size'])
 
     ## Evaluate orders.
@@ -166,7 +170,7 @@ class TestWrapper(ValidationWrapper):
         percentage = ((self.time_progress - self.start_time) /
                       (self.end_time - self.start_time)) * 100
 
-        self.current_data = self.test_data.iloc[self.row_progress]
+        self.current_data = self.test_data.loc[self.row_progress]
         # Accumulate candle history for potential user processing.
         self.candle_history = self.candle_history.append(self.current_data)
         self.row_progress += 1
@@ -176,6 +180,7 @@ class TestWrapper(ValidationWrapper):
 
         end = time.time()
         print(f"{percentage:.3f}% \
-exec time: {end - begin:.3f}, date: {self.time_progress}, orders: {len(self.orders)}")
+exec time: {end - begin:.3f}, date: {self.current_data['startTime']}, \
+orders: {len(self.orders)} {self.cyclic_message_appendix}")
 
         return (running, self.time_progress)

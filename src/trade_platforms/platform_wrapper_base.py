@@ -36,6 +36,8 @@ class PlatformWrapper():
         self.current_asks = None
         ## Stores the start time of the run
         self.start_time = datetime.now()
+        ## Message showing details every cycle.
+        self.cyclic_message_appendix = ''
 
     # Interface to place_order.
     def place_order(self):
@@ -100,6 +102,10 @@ class PlatformWrapper():
     def get_cycle_timestamp(self):
         return self.cycle_timestamp
 
+    ## Appends additional info to the cyclic print
+    def append_to_cyclic_message(self, message):
+        self.cyclic_message_appendix = message
+
     ## Updates the current cycle timestamp.
     #  Implementation differs in Test, Validation and Production modes.
     def update_cycle_timestamp(self):
@@ -111,7 +117,8 @@ class PlatformWrapper():
         (self.current_bids, self.current_asks) = self.fetch_orderbook(100)
         if self.allow_cycle_progress_print:
             print(f"Cycle: {self.cycle}, \
-time: {self.cycle_timestamp}, orders: {len(self.get_order_history())}")
+time: {self.cycle_timestamp}, orders: {len(self.get_order_history())} \
+{self.cyclic_message_appendix}")
             self.cycle += 1
         self.current_price = self.fetch_current_price()
         if self.sleep_time > 0:

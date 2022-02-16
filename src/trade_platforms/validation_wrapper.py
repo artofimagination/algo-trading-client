@@ -20,27 +20,8 @@ class ValidationWrapper(PlatformWrapper):
         self.current_data = None
 
         # ---------- Balances
-        ## Simulated balance value in quote currency.
-        self.start_balance = 200
         ## Simulated balance data.
-        self.balances = {
-            "USD": {
-                "coin": "USD",
-                "free": self.start_balance,
-                "spotBorrow": 0.0,
-                "total": self.start_balance,
-                "usdValue": self.start_balance,
-                "availableWithoutBorrow": self.start_balance
-            },
-            "BTC": {
-                "coin": "BTC",
-                "free": 0.0,
-                "spotBorrow": 0.0,
-                "total": 0.0,
-                "usdValue": 0.0,
-                "availableWithoutBorrow": 0.0
-            }
-        }
+        self.balances = None
 
         # ---------- Orders
         ## Stores the highest order price ever made. Needed optimize order search
@@ -82,7 +63,7 @@ class ValidationWrapper(PlatformWrapper):
             "makerFee": 0.0002,
             "marginFraction": 0.5588433331419503,
             "openMarginFraction": 0.2447194090423075,
-            "takerFee": 0.004,
+            "takerFee": 0.07 / 100.0,
             "totalAccountValue": 3568180.98341129,
             "totalPositionSize": 6384939.6992,
             "username": "user@domain.com",
@@ -108,7 +89,24 @@ class ValidationWrapper(PlatformWrapper):
     ## Sets the inital test balance in quote currency.
     #  @param balance Amount of the initial balance
     def set_start_balance(self, balance):
-        self.start_balance = balance
+        self.balances = {
+            "USD": {
+                "coin": "USD",
+                "free": balance,
+                "spotBorrow": 0.0,
+                "total": balance,
+                "usdValue": balance,
+                "availableWithoutBorrow": balance
+            },
+            "BTC": {
+                "coin": "BTC",
+                "free": 0.0,
+                "spotBorrow": 0.0,
+                "total": 0.0,
+                "usdValue": 0.0,
+                "availableWithoutBorrow": 0.0
+            }
+        }
 
     ## Returns the simulation start timestamp.
     def get_start_timestamp(self):
@@ -116,29 +114,21 @@ class ValidationWrapper(PlatformWrapper):
 
     ## Calculates the amounts and stores the order in the orders data frame.
     def place_order(self, type, side, price, volume):
+        if type == 'market' and price != self.get_current_price():
+            print('You defined a price different \
+from the market value in a \'market\' order.\n\
+The price will be replaced with market value')
+            price = self.get_current_price()
+
         amount_in_usd = volume * price
-        # Market orders won't change the wallet during order placement
-        # However limit order will reduce the 'free' field.
         if side == 'buy' and self.balances['USD']['free'] < amount_in_usd:
             return None
-        elif type == 'limit' and side == 'buy' and\
-                self.balances['USD']['free'] >= amount_in_usd:
+        elif side == 'buy' and self.balances['USD']['free'] >= amount_in_usd:
             self.balances['USD']['free'] -= amount_in_usd
         elif side == 'sell' and self.balances['BTC']['free'] < volume:
             return None
-        elif type == 'limit' and side == 'sell' and\
-                self.balances['BTC']['free'] >= volume:
+        elif side == 'sell' and self.balances['BTC']['free'] >= volume:
             self.balances['BTC']['free'] -= volume
-
-        if self.balances['BTC']['total'] < self.balances['BTC']['free'] or\
-                self.balances['BTC']['total'] < 0.0 or\
-                self.balances['BTC']['free'] < 0.0:
-            raise Exception("BTC balance is invalid")
-
-        if self.balances['USD']['total'] < self.balances['USD']['free'] or\
-                self.balances['USD']['total'] < 0.0 or\
-                self.balances['USD']['free'] < 0.0:
-            raise Exception("USD balance is invalid")
 
         if price > self.highest_order_price:
             self.highest_order_price = price
@@ -164,8 +154,6 @@ class ValidationWrapper(PlatformWrapper):
             "type": type
         })
         self.orders = self.orders.append(new_order)
-        self.orders.set_index('id')
-        # self.orders = self.orders.sort_values(by='price', ascending=False)
 
         response = {"id": self.order_id_watermark}
         self.order_id_watermark += 1
@@ -207,45 +195,23 @@ class ValidationWrapper(PlatformWrapper):
         return self.orders
 
     ## Executes a buy order by updating the appropriate wallet values.
-    def _execute_buy(self, type, price, volume):
+    def _execute_buy(self, price, volume):
         received_amount_btc = (volume - volume * self.account_info['takerFee'])
         amount_to_pay = volume * price
         self.balances['USD']['total'] -= amount_to_pay
-        if type == 'market':
-            self.balances['USD']['free'] -= amount_to_pay
         self.balances['USD']['usdValue'] = self.balances['USD']['total']
         self.balances['BTC']['total'] += received_amount_btc
         self.balances['BTC']['free'] += received_amount_btc
         self.balances['BTC']['usdValue'] = self.balances['BTC']['total'] * price
-        if self.balances['BTC']['total'] < self.balances['BTC']['free'] or\
-                self.balances['BTC']['total'] < 0.0 or\
-                self.balances['BTC']['free'] < 0.0:
-            raise Exception("BTC balance is invalid")
-
-        if self.balances['USD']['total'] < self.balances['USD']['free'] or\
-                self.balances['USD']['total'] < 0.0 or\
-                self.balances['USD']['free'] < 0.0:
-            raise Exception("USD balance is invalid")
 
     ## Executes a sell order by updating the appropriate wallet values.
-    def _execute_sell(self, type, price, volume):
+    def _execute_sell(self, price, volume):
         amount_earned_usd = (volume - volume * self.account_info['takerFee']) * price
         self.balances['USD']['total'] += amount_earned_usd
         self.balances['USD']['free'] += amount_earned_usd
         self.balances['USD']['usdValue'] = self.balances['USD']['total']
         self.balances['BTC']['total'] -= volume
-        if type == 'market':
-            self.balances['BTC']['free'] -= volume
         self.balances['BTC']['usdValue'] = self.balances['BTC']['total'] * price
-        if self.balances['BTC']['total'] < self.balances['BTC']['free'] or\
-                self.balances['BTC']['total'] < 0.0 or\
-                self.balances['BTC']['free'] < 0.0:
-            raise Exception("BTC balance is invalid")
-
-        if self.balances['USD']['total'] < self.balances['USD']['free'] or\
-                self.balances['USD']['total'] < 0.0 or\
-                self.balances['USD']['free'] < 0.0:
-            raise Exception("USD balance is invalid")
 
     ## Updates the order after succesfull sell or buy.
     def _update_order(self, order, volume):
@@ -267,7 +233,7 @@ class ValidationWrapper(PlatformWrapper):
             volume = orderbook_item['volume']
             if volume > order['remainingSize']:
                 volume = order['remainingSize']
-            _execute_order(order['type'], orderbook_item['price'], volume)
+            _execute_order(orderbook_item['price'], volume)
             order = self._update_order(order, volume)
             if order['status'] == 'closed':
                 break
@@ -285,7 +251,7 @@ class ValidationWrapper(PlatformWrapper):
         volume = orderbook_item['volume'].iloc[0]
         if volume > order['remainingSize']:
             volume = order['remainingSize']
-        _execute_order(order['type'], order['price'], volume)
+        _execute_order(order['price'], volume)
         return self._update_order(order, volume)
 
     ## Checks the order side of a market order and executes the appropriate action
@@ -315,33 +281,29 @@ class ValidationWrapper(PlatformWrapper):
     ## Run through all orders and execute buy or sell if conditions are met.
     def evaluate_orders(self):
         # Skip execution if none of the order prices are within range.
-        if (self.current_data['close'] > self.current_data['open'] and
-                (self.highest_order_price < self.current_data['open'] or
-                 self.lowest_order_price > self.current_data['closed'])) or\
-            (self.current_data['close'] <= self.current_data['open'] and
-                (self.highest_order_price < self.current_data['closed'] or
-                 self.lowest_order_price > self.current_data['open'])):
-            return
-
-        self.orders_of_interest_market = self.orders[self.orders['type'] == 'market']
-        self.orders_of_interest_market = \
-            self.orders_of_interest_market.apply(self._execute_market, axis=1)
-        self.orders_of_interest_limit = \
-            self.orders[self.orders['type'] == 'limit']
-        self.orders_of_interest_limit = \
-            self.orders_of_interest_limit.apply(self._execute_limit, axis=1)
-        open_market_orders = \
-            self.orders_of_interest_market[
-                self.orders_of_interest_market['status'] != 'closed']
-        open_limit_orders = \
-            self.orders_of_interest_limit[
-                self.orders_of_interest_limit['status'] != 'closed']
-        self.orders = open_market_orders
-        self.orders = self.orders.append(open_limit_orders)
+        if self.get_current_price() >= self.lowest_order_price and \
+                self.get_current_price() <= self.highest_order_price:
+            self.orders_of_interest_market = self.orders[self.orders['type'] == 'market']
+            self.orders_of_interest_market = \
+                self.orders_of_interest_market.apply(self._execute_market, axis=1)
+            self.orders_of_interest_limit = \
+                self.orders[self.orders['type'] == 'limit']
+            self.orders_of_interest_limit = \
+                self.orders_of_interest_limit.apply(self._execute_limit, axis=1)
+            open_market_orders = \
+                self.orders_of_interest_market[
+                    self.orders_of_interest_market['status'] != 'closed']
+            open_limit_orders = \
+                self.orders_of_interest_limit[
+                    self.orders_of_interest_limit['status'] != 'closed']
+            self.orders = open_market_orders
+            self.orders = self.orders.append(open_limit_orders)
 
     ## Evaluates validation tasks.
     def evaluate(self, trade):
         (running, now) = super().evaluate(trade)
+        self.balances['BTC']['usdValue'] = \
+            self.balances['BTC']['total'] * self.current_price
         self.evaluate_orders()
         return (running, now)
 
