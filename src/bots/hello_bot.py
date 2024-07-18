@@ -1,26 +1,28 @@
 from bots.bot_base import Mode, BotBase
 
 
-## Exmaple trade bot for tutorial purposes.
-# It is suggested to use, the following basic structure
-# when writing your own bot.
-# When creating your custom bot, just copy this over and rename the class
-# to your desired name
 class HelloBot(BotBase):
+    """
+        Example trade bot for tutorial purposes. It is suggested to use the following basic structure
+        when writing your own bot. When creating your custom bot, just copy this over and rename the class
+        to your desired name.
+    """
     def __init__(self, platforms, mode=Mode.Test):
         super(HelloBot, self).__init__(platforms, mode)
         self.count = 0
 
-    ## Implement your way of market bias detector
-    #  This example will switch bias every cycle.
     def _determine_bias(self):
+        """
+            Implement your way of market bias detector
+            This example will switch bias every cycle.
+        """
         self.count += 1
         if self.count % 2 == 1:
             return 'bullish'
         return 'bearish'
 
-    ## This function should do the main trading logic.
     def _trade(self):
+        """This function should do the main trading logic."""
         market_value = self.get_current_price()
         current_balance = self.get_balances()['USD']['total']
         amount_to_trade_USD = current_balance / 10
@@ -43,16 +45,16 @@ class HelloBot(BotBase):
             pass
         return True
 
-    # Load your test data set or any local variables, members if needed.
     def _setup(self):
+        """Load your test data set or any local variables, members if needed."""
         self.count = 0
         # Setup the main loop with an initial evaluation.
         (running, timestamp) = self.evaluate(self._trade)
         # Optional: Setup plot data
         self.init_plot_data()
 
-    ## Main loop of the algorithm
     def run(self):
+        """Main loop of the algorithm."""
         try:
             self._setup()
             # Main loop of the algorithm

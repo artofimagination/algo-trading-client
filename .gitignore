@@ -2,4 +2,8 @@
 logs
 __pycache__
 src/bots/data
+src/binance
 .ipynb_checkpoints
+binance_connector_python
+test-prv-key.pem
+test-pub-key.pem

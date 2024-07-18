@@ -4,16 +4,62 @@ import plotly.graph_objects as go
 from popup import show_error_box
 from os.path import exists
 import time
+import random
 
 from trade_platforms.validation_wrapper import ValidationWrapper
+from trade_platforms.binance_wrapper import Binance
+
+
+def _parse_resolution(resolution):
+    if resolution == '15m':
+        return 15
+    if resolution == '1m':
+        return 1
+
+
+def fragment_candle(candle):
+    diff = int(abs(candle['open'] - candle['close']))
+    fragments = [0]
+    sum = 0
+    for _ in range(1, 15):
+        fragment = random.randint(-30, 30)
+        fragments.append(fragment)
+        sum += fragment
+
+    if sum != 0 and diff != 0:
+        ratio = (sum / diff)
+    elif sum == 0 and diff != 0:
+        fragments[0] = -fragments[0]
+        sum += 2 * fragments[0]
+        ratio = (sum / diff)
+    elif sum != 0 and diff == 0:
+        ratio = (sum / (diff + 0.1))
+    else:
+        ratio = 1
+
+    final_fragments = []
+    for fragment in fragments:
+        fragment /= ratio
+        if sum != 0 and diff == 0:
+            fragment -= (0.1 / 15)
+        final_fragments.append(fragment)
+
+    sum = 0
+    for fragment in final_fragments:
+        sum += fragment
+
+    if diff != round(sum):
+        i == 0
+
+    return final_fragments
 
 
 ## Test platform client wrapper.
 #  Simulates platform behavior using pregenerated test data.
 #  No connection is used to a real platform.
 class TestWrapper(ValidationWrapper):
-    def __init__(self):
-        super(TestWrapper, self).__init__(None, "TestWrapper")
+    def __init__(self, platforms):
+        super(TestWrapper, self).__init__(platforms, "TestWrapper")
         # Stores the test data set the wrapper will feed to the bot.
         self.test_data = None
         # Start time of test data playback
@@ -28,15 +74,13 @@ class TestWrapper(ValidationWrapper):
         # this progress count contains the progress
         # of processing a single chunk. It is reset to 0 on a new chunk.
         self.row_progress = 0
+        self.candle_progress = 0
+        self.candle_fragments = []
         ## See @PlatformWrapper
         self.allow_cycle_progress_print = False
         # Current chunk
         self.current_chunk = None
-        # When replaying historical data it is possible that some frames are missing.
-        # This counter keeps count of those.
-        self.missing_element_count = 0
-        # Stores the historical data that has been already processed in the run.
-        self.candle_history = pd.DataFrame({
+        self.accumulated_history_candles = pd.DataFrame({
             "close": [],
             "high": [],
             "low": [],
@@ -44,6 +88,26 @@ class TestWrapper(ValidationWrapper):
             "startTime": [],
             "volume": []
         })
+        self.candle_plot = None
+        # When replaying historical data it is possible that some frames are missing.
+        # This counter keeps count of those.
+        self.missing_element_count = 0
+        # Stores the historical data that has been already processed in the run.
+        if isinstance(self.platform, Binance):
+            self.candle_history = pd.DataFrame({
+                "startTime": [],
+                "open": [],
+                "high": [],
+                "low": [],
+                "close": [],
+                "volume": [],
+                "closeTime": [],
+                "quoteAssetVolume": [],
+                "noOfTrades": [],
+                "takerByBaseAssetVol": [],
+                "takerByQuoteAssetVol": [],
+                "ignore": []
+            })
 
     ## Sets the start and end time of the loadable test data.
     #  @param test_data_location test data location
@@ -63,6 +127,23 @@ class TestWrapper(ValidationWrapper):
         self.row_progress = \
             self.test_data.index[self.test_data['startTime'] == start].values[0]
 
+    def _accumulate_history_candles(self, data, resolution):
+        data = data.iloc[0]
+        if len(self.accumulated_history_candles) == 0:
+            self.accumulated_history_candles = data
+            return self.accumulated_history_candles
+
+        if data['high'] > self.accumulated_history_candles['high']:
+            self.accumulated_history_candles['high'] = data['high']
+        if data['low'] < self.accumulated_history_candles['low']:
+            self.accumulated_history_candles['low'] = data['low']
+        self.accumulated_history_candles['volume'] += data['volume']
+        time_diff = data['startTime'] - self.accumulated_history_candles['startTime']
+        if time_diff >= timedelta(minutes=_parse_resolution(resolution)):
+            self.accumulated_history_candles = data
+        self.accumulated_history_candles['close'] = data['close']
+        return self.accumulated_history_candles
+
     ## Returns the historical test data.
     def historical_data(self, start_time, end_time, resolution):
         start = pd.to_datetime(datetime.fromtimestamp(start_time))
@@ -76,7 +157,25 @@ class TestWrapper(ValidationWrapper):
     ## Returns the current market ask. In test mode
     # That is the average of open and close values
     def fetch_current_price(self):
-        return (self.current_data['open'] + self.current_data['close']) / 2.0
+        if self.current_data['open'] > self.current_data['close']:
+            # diff = self.current_data['open'] - self.current_data['close']
+            # part = self.candle_fragments[self.candle_progress - 1]
+            # #part = random.randint(int(-diff), int(diff))
+            # price = self.current_data['open'] - part
+            return self.current_data['close']
+        else:
+            # diff = self.current_data['close'] - self.current_data['open']
+            # part = self.candle_fragments[self.candle_progress - 1]
+            # #part = random.randint(int(-diff), int(diff))
+            # price = self.current_data['open'] + part
+            return self.current_data['close']
+
+    def get_candle_opening_price(self):
+        return self.current_data['open']
+
+    ## Returns the current candle
+    def get_current_candle(self, market=None):
+        return self.current_data
 
     ## Returns the simulation start timestamp.
     def get_start_timestamp(self):
@@ -93,8 +192,8 @@ class TestWrapper(ValidationWrapper):
     def plot_historical(self, start_date=None, end_date=None, resolution=None):
         df = self.candle_history
 
-        fig = go.Figure()
-        fig.update_layout(
+        self.candle_plot = go.Figure()
+        self.candle_plot.update_layout(
             title={
                 'text': "USD/BTC",
                 'x': 0.5,
@@ -104,7 +203,7 @@ class TestWrapper(ValidationWrapper):
             yaxis_title="Price",
             xaxis_rangeslider_visible=False
         )
-        fig.add_trace(
+        self.candle_plot.add_trace(
             go.Candlestick(
                 x=df['startTime'],
                 open=df['open'],
@@ -113,7 +212,12 @@ class TestWrapper(ValidationWrapper):
                 close=df['close']
             )
         )
-        fig.show()
+
+    def get_candle_plot(self):
+        return self.candle_plot
+
+    def show_candles(self):
+        self.candle_plot.show()
 
     ## Executes sell/buy action on a single order.
     #  @param order the single order that needs action.
@@ -134,24 +238,32 @@ class TestWrapper(ValidationWrapper):
                 self.get_current_price() <= self.highest_order_price:
             # Only interested in orders, those prices are withing the current candle.
             self.orders_of_interest = self.orders[
-                ((self.current_data['open'] <= self.current_data['close']) &
-                 (self.orders['price'] >= self.current_data['open']) &
-                 (self.orders['price'] <= self.current_data['close'])) |
-                ((self.current_data['open'] > self.current_data['close']) &
-                 (self.orders['price'] <= self.current_data['open']) &
-                 (self.orders['price'] >= self.current_data['close']))]
+                (self.orders['status'] != 'closed') &
+                (((self.current_data['high'] <= self.current_data['low']) &
+                 (self.orders['price'] >= self.current_data['high']) &
+                 (self.orders['price'] <= self.current_data['low'])) |
+                 ((self.current_data['high'] > self.current_data['low']) &
+                 (self.orders['price'] <= self.current_data['high']) &
+                 (self.orders['price'] >= self.current_data['low'])))]
+
+            if len(self.orders_of_interest) == 0 and self.order_placed:
+                i = 0
 
             self.orders_of_interest = \
                 self.orders_of_interest.apply(self._execute_single_order, axis=1)
+            self.order_placed = False
+            # # Throw away closed orders to increase performance.
+            # self.orders = self.orders[
+            #     ((self.current_data['open'] <= self.current_data['close']) &
+            #      ((self.orders['price'] < self.current_data['open']) |
+            #      (self.orders['price'] > self.current_data['close']))) |
+            #     ((self.current_data['open'] > self.current_data['close']) &
+            #      ((self.orders['price'] > self.current_data['open']) |
+            #      (self.orders['price'] < self.current_data['close'])))]
 
-            # Throw away closed orders to increase performance.
-            self.orders = self.orders[
-                ((self.current_data['open'] <= self.current_data['close']) &
-                 ((self.orders['price'] < self.current_data['open']) |
-                 (self.orders['price'] > self.current_data['close']))) |
-                ((self.current_data['open'] > self.current_data['close']) &
-                 ((self.orders['price'] > self.current_data['open']) |
-                 (self.orders['price'] < self.current_data['close'])))]
+            # Instead of removing closed orders, they state will change to closed
+            self.orders = pd.concat([self.orders, self.orders_of_interest])
+            self.orders = self.orders[self.orders['status'] == 'closed']
 
     ## Evaluates test wrapper tasks.
     #  @param trade is a function callback to the user implemented
@@ -171,16 +283,25 @@ class TestWrapper(ValidationWrapper):
                       (self.end_time - self.start_time)) * 100
 
         self.current_data = self.test_data.loc[self.row_progress]
-        # Accumulate candle history for potential user processing.
-        self.candle_history = self.candle_history.append(self.current_data)
-        self.row_progress += 1
-        self.time_progress += timedelta(seconds=15)
+        #if self.candle_progress == 1 or self.candle_progress == 0:
+        self.current_data = self.test_data.loc[self.row_progress]
+            #self.candle_fragments = fragment_candle(self.current_data)
+
+        #if self.candle_progress == 1:
+            # Accumulate candle history for potential user processing.
+        self.candle_history = pd.concat(
+            [self.candle_history, pd.DataFrame([self.current_data])])
 
         (running, _) = super().evaluate(trade)
+        self.time_progress += timedelta(seconds=15 * 60)
+        # if self.candle_progress >= 15:
+        #     self.candle_progress = -1
+        self.row_progress += 1
+        # self.candle_progress += 1
 
         end = time.time()
         print(f"{percentage:.3f}% \
-exec time: {end - begin:.3f}, date: {self.current_data['startTime']}, \
+exec time: {end - begin:.3f}, date: {self.current_data['startTime'] + timedelta(seconds=15 * 60)}, \
 orders: {len(self.orders)} {self.cyclic_message_appendix}")
 
         return (running, self.time_progress)

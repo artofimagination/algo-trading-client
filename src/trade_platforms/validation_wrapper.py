@@ -1,8 +1,16 @@
 from typing import List
 import pandas as pd
 import sys
+import decimal
+
+decimal.getcontext().prec = 6
 
 from trade_platforms.platform_wrapper_base import PlatformWrapper
+from trade_platforms.binance_wrapper import Binance
+
+
+def truncate(value):
+    return int(value * 10000000) / 10000000
 
 
 ## Validation platform client wrapper.
@@ -16,12 +24,15 @@ class ValidationWrapper(PlatformWrapper):
         if platforms is not None:
             self.platform = list(platforms.values())[0]
 
+        self.USD = 'USDT'
+
         ## Current datast element data of the processing.
         self.current_data = None
 
         # ---------- Balances
         ## Simulated balance data.
         self.balances = None
+        self.order_placed = False
 
         # ---------- Orders
         ## Stores the highest order price ever made. Needed optimize order search
@@ -90,8 +101,8 @@ class ValidationWrapper(PlatformWrapper):
     #  @param balance Amount of the initial balance
     def set_start_balance(self, balance):
         self.balances = {
-            "USD": {
-                "coin": "USD",
+            self.USD: {
+                "coin": self.USD,
                 "free": balance,
                 "spotBorrow": 0.0,
                 "total": balance,
@@ -120,21 +131,26 @@ from the market value in a \'market\' order.\n\
 The price will be replaced with market value')
             price = self.get_current_price()
 
-        amount_in_usd = volume * price
-        if side == 'buy' and self.balances['USD']['free'] < amount_in_usd:
+        amount_in_usd = truncate(volume * price)
+        if amount_in_usd == 0:
             return None
-        elif side == 'buy' and self.balances['USD']['free'] >= amount_in_usd:
-            self.balances['USD']['free'] -= amount_in_usd
+        if side == 'buy' and self.balances[self.USD]['free'] < amount_in_usd:
+            return None
+        elif side == 'buy' and self.balances[self.USD]['free'] >= amount_in_usd:
+            self.balances[self.USD]['free'] -= amount_in_usd
+            self.balances[self.USD]['free'] = truncate(self.balances[self.USD]['free'])
         elif side == 'sell' and self.balances['BTC']['free'] < volume:
             return None
         elif side == 'sell' and self.balances['BTC']['free'] >= volume:
             self.balances['BTC']['free'] -= volume
+            self.balances['BTC']['free'] = truncate(self.balances['BTC']['free'])
 
         if price > self.highest_order_price:
             self.highest_order_price = price
         if price < self.lowest_order_price:
             self.lowest_order_price = price
 
+        self.order_placed = True
         new_order = pd.json_normalize({
             "avgFillPrice": 0,
             "clientId": None,
@@ -153,7 +169,7 @@ The price will be replaced with market value')
             "status": "open",
             "type": type
         })
-        self.orders = self.orders.append(new_order)
+        self.orders = pd.concat([self.orders, new_order])
 
         response = {"id": self.order_id_watermark}
         self.order_id_watermark += 1
@@ -182,6 +198,9 @@ The price will be replaced with market value')
     def get_balances(self):
         return self.balances
 
+    def get_order(self, order_id):
+        return self.orders[self.orders['id'] == order_id]
+
     ## Returns the full order history
     # TODO: Implement filters.
     # Note: for performance purposes, all closed orders are thrown away
@@ -198,19 +217,25 @@ The price will be replaced with market value')
     def _execute_buy(self, price, volume):
         received_amount_btc = (volume - volume * self.account_info['takerFee'])
         amount_to_pay = volume * price
-        self.balances['USD']['total'] -= amount_to_pay
-        self.balances['USD']['usdValue'] = self.balances['USD']['total']
+        self.balances[self.USD]['total'] -= amount_to_pay
+        self.balances[self.USD]['usdValue'] = self.balances[self.USD]['total']
         self.balances['BTC']['total'] += received_amount_btc
         self.balances['BTC']['free'] += received_amount_btc
+        self.balances[self.USD]['total'] = truncate(self.balances[self.USD]['total'])
+        self.balances['BTC']['total'] = truncate(self.balances['BTC']['total'])
+        self.balances['BTC']['free'] = truncate(self.balances['BTC']['free'])
         self.balances['BTC']['usdValue'] = self.balances['BTC']['total'] * price
 
     ## Executes a sell order by updating the appropriate wallet values.
     def _execute_sell(self, price, volume):
         amount_earned_usd = (volume - volume * self.account_info['takerFee']) * price
-        self.balances['USD']['total'] += amount_earned_usd
-        self.balances['USD']['free'] += amount_earned_usd
-        self.balances['USD']['usdValue'] = self.balances['USD']['total']
+        self.balances[self.USD]['total'] += amount_earned_usd
+        self.balances[self.USD]['free'] += amount_earned_usd
+        self.balances[self.USD]['total'] = truncate(self.balances[self.USD]['total'])
+        self.balances[self.USD]['free'] = truncate(self.balances[self.USD]['free'])
+        self.balances[self.USD]['usdValue'] = self.balances[self.USD]['total']
         self.balances['BTC']['total'] -= volume
+        self.balances['BTC']['total'] = (self.balances['BTC']['total'])
         self.balances['BTC']['usdValue'] = self.balances['BTC']['total'] * price
 
     ## Updates the order after succesfull sell or buy.
@@ -303,7 +328,7 @@ The price will be replaced with market value')
     def evaluate(self, trade):
         (running, now) = super().evaluate(trade)
         self.balances['BTC']['usdValue'] = \
-            self.balances['BTC']['total'] * self.current_price
+            self.balances['BTC']['total'] * self.get_current_price()
         self.evaluate_orders()
         return (running, now)
 

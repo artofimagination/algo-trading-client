@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 ## Enum to identify platforms
 class Platforms(Enum):
     FTX = "FTX"
+    Binance = "Binance"
 
 
 ## Base class for platfrom wrappers.
@@ -28,8 +29,8 @@ class PlatformWrapper():
         self.allow_cycle_progress_print = True
         ## Stores the current cycle timestamp
         self.cycle_timestamp = datetime.now()
-        ## Holds the current market price.
-        self.current_price = 0
+        ## Holds the current candle closing price.
+        self.current_candle_closing_price = 0
         ## Holds the current bids of the orderbook.
         self.current_bids = None
         ## holds the current asks of the orderbook.
@@ -41,6 +42,9 @@ class PlatformWrapper():
 
     # Interface to place_order.
     def place_order(self):
+        pass
+
+    def get_order(self, order_id):
         pass
 
     ## Get plotting historical data
@@ -84,6 +88,12 @@ class PlatformWrapper():
     def get_current_price(self):
         return self.current_price
 
+    def get_candle_opening_price(self):
+        return None
+
+    def get_current_candle(self):
+        return None
+
     ## Fetches the current market price from remote.
     #  Implemented on real platform wrappers.
     def fetch_current_price(self):
@@ -123,7 +133,9 @@ time: {self.cycle_timestamp}, orders: {len(self.get_order_history())} \
         self.current_price = self.fetch_current_price()
         if self.sleep_time > 0:
             time.sleep(self.sleep_time)
-        running = trade()
+        running = True
+        if trade is not None:
+            running = trade()
         return (running, self.cycle_timestamp)
 
     ## Interface for get_order_history
