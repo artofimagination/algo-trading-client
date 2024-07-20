@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
 import pandas as pd
 import plotly.graph_objects as go
-from popup import show_error_box
+from gui.popup import show_error_box
 from os.path import exists
 import time
 import random
+from typing import Callable
 
 from trade_platforms.validation_wrapper import ValidationWrapper
 from trade_platforms.binance_wrapper import Binance
@@ -48,9 +49,6 @@ def fragment_candle(candle):
     for fragment in final_fragments:
         sum += fragment
 
-    if diff != round(sum):
-        i == 0
-
     return final_fragments
 
 
@@ -58,7 +56,7 @@ def fragment_candle(candle):
 #  Simulates platform behavior using pregenerated test data.
 #  No connection is used to a real platform.
 class TestWrapper(ValidationWrapper):
-    def __init__(self, platforms):
+    def __init__(self, platforms, resolution_min=1):
         super(TestWrapper, self).__init__(platforms, "TestWrapper")
         # Stores the test data set the wrapper will feed to the bot.
         self.test_data = None
@@ -89,6 +87,8 @@ class TestWrapper(ValidationWrapper):
             "volume": []
         })
         self.candle_plot = None
+        # Stores the candle resolution in minutes.
+        self.resolution_min = resolution_min
         # When replaying historical data it is possible that some frames are missing.
         # This counter keeps count of those.
         self.missing_element_count = 0
@@ -146,29 +146,19 @@ class TestWrapper(ValidationWrapper):
 
     ## Returns the historical test data.
     def historical_data(self, start_time, end_time, resolution):
-        start = pd.to_datetime(datetime.fromtimestamp(start_time))
         return self.candle_history[
-            self.candle_history['startTime'] >= start]
+            self.candle_history['startTime'] >= start_time]
 
     # Updates the current cycle timestamp.
     def update_cycle_timestamp(self):
         self.cycle_timestamp = self.time_progress
 
-    ## Returns the current market ask. In test mode
-    # That is the average of open and close values
     def fetch_current_price(self):
-        if self.current_data['open'] > self.current_data['close']:
-            # diff = self.current_data['open'] - self.current_data['close']
-            # part = self.candle_fragments[self.candle_progress - 1]
-            # #part = random.randint(int(-diff), int(diff))
-            # price = self.current_data['open'] - part
-            return self.current_data['close']
-        else:
-            # diff = self.current_data['close'] - self.current_data['open']
-            # part = self.candle_fragments[self.candle_progress - 1]
-            # #part = random.randint(int(-diff), int(diff))
-            # price = self.current_data['open'] + part
-            return self.current_data['close']
+        """
+            Returns the current market ask. In test mode
+            that is the closing price of the candle.
+        """
+        return self.current_data['close']
 
     def get_candle_opening_price(self):
         return self.current_data['open']
@@ -246,9 +236,6 @@ class TestWrapper(ValidationWrapper):
                  (self.orders['price'] <= self.current_data['high']) &
                  (self.orders['price'] >= self.current_data['low'])))]
 
-            if len(self.orders_of_interest) == 0 and self.order_placed:
-                i = 0
-
             self.orders_of_interest = \
                 self.orders_of_interest.apply(self._execute_single_order, axis=1)
             self.order_placed = False
@@ -265,10 +252,18 @@ class TestWrapper(ValidationWrapper):
             self.orders = pd.concat([self.orders, self.orders_of_interest])
             self.orders = self.orders[self.orders['status'] == 'closed']
 
-    ## Evaluates test wrapper tasks.
-    #  @param trade is a function callback to the user implemented
-    #               trading or signalling logic.
-    def evaluate(self, trade):
+    def evaluate(self, trade: Callable[[], None]) -> tuple:
+        """
+            Evaluates test wrapper tasks.
+
+            Parameters:
+                - trade (function): is a function callback to the user implemented
+                  trading or signalling logic.
+
+            Returns:
+                - running (bool): retruns true if the bot is till running.
+                - progress_time (int): returns the current progerss time.
+        """
         begin = time.time()
         if not exists(self.test_data_location):
             show_error_box("Dataset does not exist")
@@ -283,17 +278,11 @@ class TestWrapper(ValidationWrapper):
                       (self.end_time - self.start_time)) * 100
 
         self.current_data = self.test_data.loc[self.row_progress]
-        #if self.candle_progress == 1 or self.candle_progress == 0:
-        self.current_data = self.test_data.loc[self.row_progress]
-            #self.candle_fragments = fragment_candle(self.current_data)
-
-        #if self.candle_progress == 1:
-            # Accumulate candle history for potential user processing.
         self.candle_history = pd.concat(
             [self.candle_history, pd.DataFrame([self.current_data])])
 
         (running, _) = super().evaluate(trade)
-        self.time_progress += timedelta(seconds=15 * 60)
+        self.time_progress += timedelta(seconds=self.resolution_min * 60)
         # if self.candle_progress >= 15:
         #     self.candle_progress = -1
         self.row_progress += 1
@@ -301,7 +290,7 @@ class TestWrapper(ValidationWrapper):
 
         end = time.time()
         print(f"{percentage:.3f}% \
-exec time: {end - begin:.3f}, date: {self.current_data['startTime'] + timedelta(seconds=15 * 60)}, \
+exec time: {end - begin:.3f}, date: {self.current_data['startTime'] + timedelta(seconds=self.resolution_min * 60)}, \
 orders: {len(self.orders)} {self.cyclic_message_appendix}")
 
         return (running, self.time_progress)

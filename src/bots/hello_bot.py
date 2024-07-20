@@ -1,4 +1,6 @@
 from bots.bot_base import Mode, BotBase
+import pandas as pd
+from datetime import timedelta
 
 
 class HelloBot(BotBase):
@@ -7,9 +9,25 @@ class HelloBot(BotBase):
         when writing your own bot. When creating your custom bot, just copy this over and rename the class
         to your desired name.
     """
-    def __init__(self, platforms, mode=Mode.Test):
-        super(HelloBot, self).__init__(platforms, mode)
+    def __init__(self, platforms, mode=Mode.Test, resolution_min=1):
+        super(HelloBot, self).__init__(platforms, mode, resolution_min)
         self.count = 0
+        # Arbitrary structure to show order visualization.
+        self.completed_orders = pd.DataFrame({
+            'order_id': [],
+            'expiry_length': [],
+            'status': [],
+            'age': [],
+            'timestamp': [],
+            'exec_timestamp': [],
+            'volume': [],
+            'volume_USD': [],
+            'price': [],
+            'start_price': [],
+            'side': [],
+        })
+
+        self.order_id_watermark = 0
 
     def _determine_bias(self):
         """
@@ -24,7 +42,7 @@ class HelloBot(BotBase):
     def _trade(self):
         """This function should do the main trading logic."""
         market_value = self.get_current_price()
-        current_balance = self.get_balances()['USD']['total']
+        current_balance = self.get_balances()['USDT']['total']
         amount_to_trade_USD = current_balance / 10
         market_structure = self._determine_bias()
         if market_structure == 'bullish':
@@ -39,8 +57,22 @@ class HelloBot(BotBase):
                 side='buy',
                 price=market_value,
                 volume=amount_to_trade_USD / market_value)
-
-        if order_result is None:
+            if order_result is not None:
+                # Example order added to the list, so we can draw it on the candle chart.
+                new_order = pd.json_normalize({
+                    'order_id': self.order_id_watermark,
+                    'age': 0,
+                    'timestamp': self.get_cycle_timestamp(),
+                    'exec_timestamp': self.get_cycle_timestamp() + timedelta(seconds=420),
+                    'volume': amount_to_trade_USD / market_value,
+                    'volume_USD': amount_to_trade_USD,
+                    'price': 7188,
+                    'start_price': 7184,
+                    'side': 'buy',
+                })
+                self.completed_orders = pd.concat([self.completed_orders, new_order])
+                self.orders_placed += 1
+        else:
             # Order failed. Balance has not enough free amount'
             pass
         return True

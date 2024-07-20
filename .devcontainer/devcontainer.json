@@ -20,7 +20,7 @@
 
   // Uncomment the next line to run commands after the container is created - for example installing curl.
   // "postCreateCommand": "apt-get update && apt-get install -y curl",
-  "runArgs": ["--env-file",".env"],
+  "runArgs": ["--env-file",".env","--gpus=all"],
   "containerEnv": { "DISPLAY": "${localEnv:DISPLAY}", "QT_X11_NO_MITSHM":"1" },
   "mounts": [
       "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",

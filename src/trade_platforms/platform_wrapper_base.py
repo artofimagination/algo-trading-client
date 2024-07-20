@@ -138,13 +138,22 @@ time: {self.cycle_timestamp}, orders: {len(self.get_order_history())} \
             running = trade()
         return (running, self.cycle_timestamp)
 
-    ## Interface for get_order_history
+    def get_closed_order_history(
+            self,
+            side=None,
+            order_type=None,
+            start_time=None,
+            end_time=None) -> List[dict]:
+        """Returns the closed order history."""
+        return None
+
     def get_order_history(
             self,
             side=None,
             order_type=None,
             start_time=None,
             end_time=None) -> List[dict]:
+        """Returns the entire order history"""
         return None
 
     def get_account_info(self):
@@ -165,6 +174,6 @@ time: {self.cycle_timestamp}, orders: {len(self.get_order_history())} \
     def set_start_balance(self, balance_USD):
         pass
 
-    ## Sets the wait time between cycles when running the platform.
     def set_wait_time(self, sleep_seconds):
+        """Sets the wait time between cycles when running the platform."""
         self.sleep_time = sleep_seconds

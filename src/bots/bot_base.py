@@ -1,4 +1,4 @@
-from popup import show_confirm_box, show_alert_box
+from gui.popup import show_confirm_box, show_alert_box
 from trade_platforms.test_wrapper import TestWrapper
 from trade_platforms.validation_wrapper import ValidationWrapper
 from trade_platforms.platform_wrapper_base import PlatformWrapper
@@ -58,7 +58,7 @@ def _isPlotOption(config, option):
 class BotBase():
     """Base class to handle generic bot behaviour."""
 
-    def __init__(self, platforms, mode):
+    def __init__(self, platforms, mode, resolution_min=1):
         if len(platforms) == 0:
             raise Exception("No trading platform and market defined")
         # A bot can connect to multiple platforms of, multiple markets
@@ -70,7 +70,7 @@ class BotBase():
             self.platforms[trade_platform.name] = trade_platform
         # Test mode platform client wrapper.
         # Contains all client side functionality for test mode.
-        self.testWrapper = TestWrapper(self.platforms)
+        self.testWrapper = TestWrapper(self.platforms, resolution_min)
         # Validation mode platform client wrapper.
         self.validationWrapper = ValidationWrapper(self.platforms)
         # Run mode. See Mode(Enum).
@@ -78,6 +78,8 @@ class BotBase():
         # if self.mode == Mode.Production and \
         #         not show_confirm_box("Production Mode! Are you sure?"):
         #     sys.exit(0)
+        # Stores the candle resolution in minutes.
+        self.resolution_min = resolution_min
 
         # Plotting data
         self.BTC_per_window_of_interest = list()

@@ -126,8 +126,7 @@ class ValidationWrapper(PlatformWrapper):
     ## Calculates the amounts and stores the order in the orders data frame.
     def place_order(self, type, side, price, volume):
         if type == 'market' and price != self.get_current_price():
-            print('You defined a price different \
-from the market value in a \'market\' order.\n\
+            print('You defined a price different from the market value in a \'market\' order.\n\
 The price will be replaced with market value')
             price = self.get_current_price()
 
@@ -201,16 +200,18 @@ The price will be replaced with market value')
     def get_order(self, order_id):
         return self.orders[self.orders['id'] == order_id]
 
-    ## Returns the full order history
-    # TODO: Implement filters.
-    # Note: for performance purposes, all closed orders are thrown away
-    # They are not retainable when calling the function.
     def get_order_history(
             self,
             side: str = None,
             order_type: str = None,
             start_time: float = None,
             end_time: float = None) -> List[dict]:
+        """
+            Returns the full order history
+            TODO: Implement filters.
+            Note: for performance purposes, all closed orders are thrown away
+            They are not retainable when calling the function.
+        """
         return self.orders
 
     ## Executes a buy order by updating the appropriate wallet values.
@@ -324,8 +325,8 @@ The price will be replaced with market value')
             self.orders = open_market_orders
             self.orders = self.orders.append(open_limit_orders)
 
-    ## Evaluates validation tasks.
     def evaluate(self, trade):
+        """Evaluates validation tasks."""
         (running, now) = super().evaluate(trade)
         self.balances['BTC']['usdValue'] = \
             self.balances['BTC']['total'] * self.get_current_price()
