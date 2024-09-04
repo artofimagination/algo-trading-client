@@ -3,6 +3,7 @@ from trade_platforms.platform_wrapper_base import Platforms
 from trade_platforms.binance_wrapper import Binance
 from trade_platforms.platform_wrapper_base import PlatformWrapper
 
+import time
 from gui.popup import show_error_box
 from os.path import exists
 from os import mkdir, remove
@@ -28,7 +29,7 @@ def get_platform_client(platform) -> PlatformWrapper:
 
 
 def generate_dataset_filename(
-        dataset: str, platform: Platforms, start_time: datetime, end_time: datetime, resolution_min: str) -> str:
+        dataset: str, platform: Platforms, start_time: datetime, end_time: datetime, resolution_sec: int) -> str:
     """
         Generates a dataset file name based on the platform,
         start/end time and resolution.
@@ -38,7 +39,7 @@ def generate_dataset_filename(
             - platform (Platforms): Defines the platform id the data is generated from.
             - start_time (datetime): defines the start time of the dataset.
             - end_time (datetime): defines the end time of the dataset.
-            - resolution_min (int): Stores the resolution of candles to get.
+            - resolution_sec (int): Stores the resolution of candles to get in seconds.
 
         Return:
             - (str): the path and filename of the dataset.
@@ -46,13 +47,13 @@ def generate_dataset_filename(
     start_string = start_time.strftime("%Y%m%d_T%H%M")
     end_string = end_time.strftime("%Y%m%d_T%H%M")
     filename = f"{platform['platform_type'].value}_{platform['base_currency']}_\
-{platform['quote_currency']}_{dataset}_{start_string}_{end_string}_{resolution_min}m.h5"
+{platform['quote_currency']}_{dataset}_{start_string}_{end_string}_{resolution_sec}s.h5"
     path = "src/data/"
     return f"{path}{filename}"
 
 
 def generate_candle_historical_dataset(
-        platform: Platforms, start_time: datetime, end_time: datetime, resolution_min: str) -> str:
+        platform: Platforms, start_time: datetime, end_time: datetime, resolution_sec: int) -> str:
     """
         Generates candle data set from platform historical data.
         Lowest resolution is 15 seconds.
@@ -61,13 +62,13 @@ def generate_candle_historical_dataset(
             - platform (Platforms): Defines the platform id the data is generated from.
             - start_time (datetime): defines the start time of the dataset.
             - end_time (datetime): defines the end time of the dataset.
-            - resolution_min (int): Stores the resolution of candles to get.
+            - resolution_sec (int): Stores the resolution of candles to get in seconds.
 
         Returns:
             - (str): the generated file's name and path
     """
     dataset_file_name = generate_dataset_filename(
-        "candles", platform, start_time, end_time, resolution_min)
+        "candles", platform, start_time, end_time, resolution_sec)
     if exists(dataset_file_name):
         print("Dataset already created")
         return dataset_file_name
@@ -79,16 +80,17 @@ def generate_candle_historical_dataset(
     store = pd.HDFStore(dataset_file_name)
     try:
         while timestamp < end_time:
+            time.sleep(2)
             start_date = timestamp
-            # Data is always stored in 1000 minutes chunks
-            timestamp += timedelta(minutes=resolution_min * 1000)
+            # Data is always stored in chunks of 1000
+            timestamp += timedelta(seconds=resolution_sec * 1000)
             end_date = timestamp
 
             platform_client = get_platform_client(platform)
             df = platform_client.historical_data(
                 start_time=start_date.timestamp(),
                 end_time=None,
-                resolution=f"{resolution_min}m")
+                resolution_sec=resolution_sec)
             df['startTime'] = pd.to_datetime(
                 df['startTime'],
                 unit='ms')

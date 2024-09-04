@@ -58,7 +58,7 @@ def _isPlotOption(config, option):
 class BotBase():
     """Base class to handle generic bot behaviour."""
 
-    def __init__(self, platforms, mode, resolution_min=1):
+    def __init__(self, platforms, mode, resolution_sec=60):
         if len(platforms) == 0:
             raise Exception("No trading platform and market defined")
         # A bot can connect to multiple platforms of, multiple markets
@@ -70,7 +70,7 @@ class BotBase():
             self.platforms[trade_platform.name] = trade_platform
         # Test mode platform client wrapper.
         # Contains all client side functionality for test mode.
-        self.testWrapper = TestWrapper(self.platforms, resolution_min)
+        self.testWrapper = TestWrapper(self.platforms, resolution_sec)
         # Validation mode platform client wrapper.
         self.validationWrapper = ValidationWrapper(self.platforms)
         # Run mode. See Mode(Enum).
@@ -79,7 +79,7 @@ class BotBase():
         #         not show_confirm_box("Production Mode! Are you sure?"):
         #     sys.exit(0)
         # Stores the candle resolution in minutes.
-        self.resolution_min = resolution_min
+        self.resolution_sec = resolution_sec
 
         # Plotting data
         self.BTC_per_window_of_interest = list()
@@ -136,7 +136,7 @@ class BotBase():
             self.plot_historical(
                 start_date=self.get_start_timestamp().timestamp(),
                 end_date=timestamp.timestamp(),
-                resolution=15)
+                resolution=self.resolution_sec)
 
         if _isPlotOption(plots, PlotOptions.USDPlot):
             fig = px.line(
@@ -165,14 +165,14 @@ class BotBase():
         self.fee = self.get_account_info()['takerFee']
         self.start_price = self.get_current_price()
 
-    def accumulate_plot_data(self, timestamp, window_of_interest_seconds=15, config=0):
+    def accumulate_plot_data(self, timestamp, window_of_interest_min=15, config=0):
         """
             Accumulates plot data.
             Parameters:
                 - timestamp (datetime): stores the timestamp at the time of accumulation."""
         # Generic tasks, collecting plot data within the window of interest
         if (timestamp - self.previous_timestamp >= timedelta(
-                seconds=window_of_interest_seconds)):
+                seconds=window_of_interest_min * 60)):
             self.BTC_per_window_of_interest.append(0)
             self.balance_USD_per_window_of_interest.append(0)
             current_balances = self.get_balances()

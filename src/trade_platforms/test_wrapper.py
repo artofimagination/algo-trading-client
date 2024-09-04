@@ -56,7 +56,7 @@ def fragment_candle(candle):
 #  Simulates platform behavior using pregenerated test data.
 #  No connection is used to a real platform.
 class TestWrapper(ValidationWrapper):
-    def __init__(self, platforms, resolution_min=1):
+    def __init__(self, platforms, resolution_sec=60):
         super(TestWrapper, self).__init__(platforms, "TestWrapper")
         # Stores the test data set the wrapper will feed to the bot.
         self.test_data = None
@@ -88,7 +88,7 @@ class TestWrapper(ValidationWrapper):
         })
         self.candle_plot = None
         # Stores the candle resolution in minutes.
-        self.resolution_min = resolution_min
+        self.resolution_sec = resolution_sec
         # When replaying historical data it is possible that some frames are missing.
         # This counter keeps count of those.
         self.missing_element_count = 0
@@ -144,8 +144,8 @@ class TestWrapper(ValidationWrapper):
         self.accumulated_history_candles['close'] = data['close']
         return self.accumulated_history_candles
 
-    ## Returns the historical test data.
-    def historical_data(self, start_time, end_time, resolution):
+    def historical_data(self, start_time, end_time, resolution_sec):
+        """Returns the historical test data."""
         return self.candle_history[
             self.candle_history['startTime'] >= start_time]
 
@@ -282,7 +282,7 @@ class TestWrapper(ValidationWrapper):
             [self.candle_history, pd.DataFrame([self.current_data])])
 
         (running, _) = super().evaluate(trade)
-        self.time_progress += timedelta(seconds=self.resolution_min * 60)
+        self.time_progress += timedelta(seconds=self.resolution_sec)
         # if self.candle_progress >= 15:
         #     self.candle_progress = -1
         self.row_progress += 1
@@ -290,7 +290,7 @@ class TestWrapper(ValidationWrapper):
 
         end = time.time()
         print(f"{percentage:.3f}% \
-exec time: {end - begin:.3f}, date: {self.current_data['startTime'] + timedelta(seconds=self.resolution_min * 60)}, \
+exec time: {end - begin:.3f}, date: {self.current_data['startTime'] + timedelta(seconds=self.resolution_sec)}, \
 orders: {len(self.orders)} {self.cyclic_message_appendix}")
 
         return (running, self.time_progress)

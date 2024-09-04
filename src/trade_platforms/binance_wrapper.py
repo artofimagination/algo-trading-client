@@ -72,24 +72,35 @@ class Binance(PlatformWrapper):
     #  @param end_date end date of the data
     #  @param resolution of the data
     def historical_data(
-            self, start_time, end_time, resolution="15m", limit=1000):
+            self, start_time, end_time, resolution_sec=1, limit=1000):
         # Specify the base and quote currencies to get single market data
         client = self.client(self.api_key, self.api_secret, base_url=self.api_url)
+        resolution_str = f"{resolution_sec}s"
+        if resolution_sec == 60:
+            resolution_str = "1m"
+        elif resolution_sec == 900:
+            resolution_str = "15m"
+        elif resolution_sec == 1200:
+            resolution_str = "30m"
+        elif resolution_sec == 60 * 60:
+            resolution_str = "1h"
+        elif resolution_sec == 1440 * 60:
+            resolution_str = "1d"
         if start_time is None:
             candles = client.klines(
                 self.symbol,
-                resolution,
+                resolution_str,
                 limit=limit)
         elif end_time is None:
             candles = client.klines(
                 self.symbol,
-                resolution,
+                resolution_str,
                 startTime=int(start_time * 1000),
                 limit=limit)
         else:
             candles = client.klines(
                 self.symbol,
-                resolution,
+                resolution_str,
                 startTime=int(start_time * 1000),
                 endTime=int(end_time * 1000),
                 limit=limit)

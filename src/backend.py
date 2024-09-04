@@ -47,13 +47,13 @@ class Backend(QObject):
             platform=platform,
             start_time=simulation_start,
             end_time=simulation_end,
-            resolution_min=1)
+            resolution_sec=60)
 
         self.bot = HelloBot(platforms=[
             Binance(base_currency="BTC", quote_currency="USDT")
         ],
             mode=Mode.Test,
-            resolution_min=1)
+            resolution_sec=60)
 
         if self.bot.mode == Mode.Test:
             self.bot.set_test_data_interval(
@@ -65,6 +65,22 @@ class Backend(QObject):
             self.bot.set_start_balance(200)
         self.bot.set_wait_time(wait_time_seconds=0)
         self.bot.run()
+
+    def download(self):
+        """Downloads the data hardcoded in this function"""
+        simulation_start = datetime(2023, 1, 1, 0, 0)
+        simulation_end = datetime(2024, 1, 1, 0, 0)
+        resolution_sec = 1
+        platform = {
+            'platform_type': Platforms.Binance,
+            'base_currency': 'BTC',
+            'quote_currency': 'USDT'
+        }
+        generate_candle_historical_dataset(
+            platform=platform,
+            start_time=simulation_start,
+            end_time=simulation_end,
+            resolution_sec=resolution_sec)
 
     def run_bot(self, selected_bot: str):
         """Runs the selected bot"""

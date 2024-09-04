@@ -1,4 +1,4 @@
-from bots.bot_base import Mode, BotBase
+from bots.bot_base import Mode, BotBase, PlotOptions
 import pandas as pd
 from datetime import timedelta
 
@@ -9,8 +9,8 @@ class HelloBot(BotBase):
         when writing your own bot. When creating your custom bot, just copy this over and rename the class
         to your desired name.
     """
-    def __init__(self, platforms, mode=Mode.Test, resolution_min=1):
-        super(HelloBot, self).__init__(platforms, mode, resolution_min)
+    def __init__(self, platforms, mode=Mode.Test, resolution_sec=60):
+        super(HelloBot, self).__init__(platforms, mode, resolution_sec)
         self.count = 0
         # Arbitrary structure to show order visualization.
         self.completed_orders = pd.DataFrame({
@@ -71,10 +71,9 @@ class HelloBot(BotBase):
                     'side': 'buy',
                 })
                 self.completed_orders = pd.concat([self.completed_orders, new_order])
-                self.orders_placed += 1
-        else:
-            # Order failed. Balance has not enough free amount'
-            pass
+            else:
+                # Order failed. Balance has not enough free amount'
+                pass
         return True
 
     def _setup(self):
@@ -138,4 +137,4 @@ class HelloBot(BotBase):
             pass
         # Optional: Once the simulation loop is done
         # Plot the accumulated data.
-        self.plot_data(timestamp)
+        self.plot_data(timestamp, PlotOptions.USDPlot.value | PlotOptions.BTCPlot.value | PlotOptions.Candles.value)

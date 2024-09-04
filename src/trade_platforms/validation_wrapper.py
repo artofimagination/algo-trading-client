@@ -190,8 +190,8 @@ The price will be replaced with market value')
     def get_account_info(self) -> dict:
         return self.account_info
 
-    def historical_data(self, start_time, end_time, resolution):
-        return self.platform.historical_data(start_time, end_time, resolution)
+    def historical_data(self, start_time, end_time, resolution_sec):
+        return self.platform.historical_data(start_time, end_time, resolution_sec)
 
     ## Returns the balances.
     def get_balances(self):
